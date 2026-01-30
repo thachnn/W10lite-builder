@@ -1,0 +1,13 @@
+# Logs
+*.log*
+
+# Backups
+*.bak
+*.zip
+*.iso
+*.7z
+*.tgz
+
+# Misc.
+.DS_Store
+Thumbs.db
