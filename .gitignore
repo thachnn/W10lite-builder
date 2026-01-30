@@ -9,6 +9,11 @@
 *.tgz
 !*.tar.*
 
+# Runtime directories
+/*/
+!/tmp/
+tmp/*/
+
 # Misc.
 .DS_Store
 Thumbs.db
