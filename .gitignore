@@ -7,6 +7,7 @@
 *.iso
 *.7z
 *.tgz
+!*.tar.*
 
 # Misc.
 .DS_Store

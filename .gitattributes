@@ -9,3 +9,4 @@
 
 # truly binary files
 bin/** binary diff
+*.tar.* binary diff
