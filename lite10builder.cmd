@@ -38,9 +38,10 @@ if exist dvd\ rmdir /s /q dvd
 
 :: image arch
 set arch=x86
+
 if /i "%SourceFile:~-4%"==".wim" (
   7z l -ba "%SourceFile%" Windows/SysWOW64/expand.* 1/Windows/SysWOW64/expand.* | find /v "" && (set arch=x64)
-  call :prepareUUP %arch%
+  call UUPdownload.cmd %arch%
 
   call :processWIM "%SourceFile%" %arch%
 ) else if /i "%SourceFile:~-4%"==".iso" (
@@ -51,7 +52,8 @@ if /i "%SourceFile:~-4%"==".wim" (
   7z x "%SourceFile%" -odvd
 
   if exist dvd\efi\boot\*x64.efi set arch=x64
-  call :prepareUUP %arch%
+  :: prepare UUP
+  call UUPdownload.cmd %arch%
 
   for %%i in (dvd\sources\install.wim dvd\sources\boot.wim) do call :processWIM "%%i" %arch%
   call :processDVD "%TargetISO%"
@@ -63,22 +65,21 @@ goto :eof
 
 :: Functions
 ::--------------
-:prepareUUP
-echo Prepare "%1" UUP
-
-goto :eof
-
 :processWIM
+set "wimFile=%~1"
+set "arch=%~2"
+
 :: process WinRE first
-7z e -aoa "%1" Windows/System32/Recovery/Winre.wim 1/Windows/System32/Recovery/Winre.wim | findstr /b /c:"No files" || (
-  call :processWIM Winre.wim "%2"
+7z e -aoa "%wimFile%" Windows/System32/Recovery/Winre.wim 1/Windows/System32/Recovery/Winre.wim | findstr /b /c:"No files" || (
+  call :processWIM Winre.wim "%arch%"
 )
 
-echo Process WIM "%1"
+echo Process WIM "%wimFile%"
 
 goto :eof
 
 :processDVD
-echo TargetISO: "%1"
+set "destISO=%~1"
+echo TargetISO: "%destISO%"
 
 goto :eof

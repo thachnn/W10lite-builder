@@ -3,16 +3,16 @@
 
 # Backups
 *.bak
-*.zip
 *.iso
+*.wim
 *.7z
-*.tgz
-!*.tar.*
 
-# Runtime directories
+# Runtime files
 /*/
 !/tmp/
-tmp/*/
+tmp/**
+!/tmp/*.reg
+!/tmp/*.manifest
 
 # Misc.
 .DS_Store
