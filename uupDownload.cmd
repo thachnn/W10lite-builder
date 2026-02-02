@@ -5,7 +5,7 @@ setlocal EnableDelayedExpansion
 set "arch=%~1"
 if "%arch%"=="" set arch=x64
 set "iniVer=%~n0"
-if "%~2" neq "" set "iniVer=%iniVer%.%~2"
+if not "%~2"=="" set "iniVer=%iniVer%.%~2"
 
 cd /d "%~dp0"
 
@@ -21,9 +21,9 @@ echo Prepare "%arch%" "%iniVer%"
 if not exist uup\ mkdir uup
 
 :: read INI
-for /f "usebackq tokens=1* delims==" %%a in ("%iniVer%.ini") do if "%%b" neq "" if "%%a" neq "" (
+for /f "usebackq tokens=1* delims==" %%a in ("%iniVer%.ini") do if not "%%b"=="" if not "%%a"=="" (
   set "_a=%%a"
-  if "!_a:-%arch%=!" neq "!_a!" for %%i in ( "!_a:,=" "!" ) do if not exist "uup\%%~i" call :doDownload "%%b" "%%~i"
+  if not "!_a:-%arch%=!"=="!_a!" for %%i in ( "!_a:,=" "!" ) do if not exist "uup\%%~i" call :doDownload "%%b" "%%~i"
 )
 
 goto :eof
@@ -38,9 +38,10 @@ echo Download file "%outFile%"
 
 :: extract hash from URL
 for /f "tokens=1 delims=?" %%a in ("%url%") do set "crc=%%~na"
-echo "%crc%" | findstr /i "_[0-9a-f][0-9a-f]*""" && (set "crc=%crc:*_=%" & set "crc=--checksum=""sha-1=!crc:*_=!""") || (set "crc=")
+echo "%crc%" | findstr /i "_[0-9a-f][0-9a-f]*""" && (set "crc=%crc:*_=%" & set "crc=--checksum="sha-1=!crc:*_=!"") || (set "crc=")
 
-aria2c %crc% --file-allocation=prealloc -c -R -o "tmp\%outFile%" "%url%"
+echo aria2c %crc%
+aria2c %crc% --file-allocation=none -c -R -o "tmp\%outFile%" "%url%"
 
 :Downloaded
 echo Try to extract cab from "%outFile%"
