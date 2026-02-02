@@ -65,6 +65,11 @@ goto :eof
 
 :: Functions
 ::--------------
+:prepareUUP
+for /d %%i in ("tmp\KB*-%arch%*") do if exist "%%i\update.mum" goto :eof
+
+exit /b
+
 :processWIM
 set "wimFile=%~1"
 set "arch=%~2"
