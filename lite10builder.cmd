@@ -111,26 +111,109 @@ exit /b
 
 :updateWIM
 set "_index=%~1"
-
-:: detect WinRE
-::if /i "!edition!"=="WindowsPE" 7z l -ba "%wimFile%" Windows/servicing/Packages/WinPE-Rejuv-Package~*.mum | find /i ".mum" && set edition=WinRE
 echo Update "!edition!.!_build!" image "%wimFile%:%_index%"
 
 if exist mount\* rmdir /s /q mount
 if not exist mount\ mkdir mount
 
-:: Dism /Mount-Image /ImageFile:"%wimFile%" /Index:%_index% /MountDir:mount /Optimize || exit /b 2
+Dism /Mount-Image /ImageFile:"%wimFile%" /Index:%_index% /MountDir:mount /Optimize || exit /b 2
 
+:: pre-update
+if /i "!edition!"=="WindowsPE" (
+  echo call :sbsConfig "" "" 1
+) else (
+  :: TODO switch edition
+  :: manage features and packages
+  :: ESU AI patching
+  if !_build! geq 19041 if !_build! lss 19046 call :latentESU
+)
 
-:: Dism /ScratchDir:tmp /Image:mount /Cleanup-Image /StartComponentCleanup /ResetBase || goto :Discard
+pushd tmp
 
-:: Dism /Unmount-Image /MountDir:mount /Commit
+:: ServicingStack first
+set "_pkgPath[0]="
+for /d %%k in ("KB*-%arch%-SSU") do call :checkInstall "%%k" "_pkgPath[0]"
+
+set "_pkgPath[1]="
+if /i "!edition!"=="WindowsPE" (
+  :: SafeOS DU (WinRE only == exist \WinPE-Rejuv-Package~*.mum)
+  for /d %%k in ("KB*-%arch%-SafeOS") do call :checkInstall "%%k" "_pkgPath[1]"
+) else (
+  :: SecureBoot
+  for /d %%k in ("KB*-%arch%-SecureBoot") do call :checkInstall "%%k" "_pkgPath[1]"
+)
+
+:: ldr = Enablement NetFX NetRollup
+set "_pkgPath[2]="
+for /d %%k in ("KB*-%arch%-Enablement" "KB*-%arch%-NetFX") do call :checkInstall "%%k" "_pkgPath[2]"
+for /f "delims=" %%k in ('dir /b /ad /on "KB*-%arch%-NDP*" "KB*-%arch%"') do call :checkInstall "%%k" "_pkgPath[2]"
+
+:: cumulative update
+set "_pkgPath[3]="
+for /d %%k in ("KB*-%arch%-LCU") do call :checkInstall "%%k" "_pkgPath[3]"
+
+for /l %%n in (0,1,3) do if not "!_pkgPath[%%n]!"=="" (
+  Dism /ScratchDir:. /Image:..\mount /Add-Package !_pkgPath[%%n]! || goto :Discard
+)
+popd
+
+Dism /ScratchDir:tmp /Image:mount /Cleanup-Image /StartComponentCleanup /ResetBase || goto :Discard
+
+:: cleanup manually
+Dism /Unmount-Image /MountDir:mount /Commit
 
 exit /b
 
 :Discard
+popd 2>nul
 Dism /Unmount-Image /MountDir:mount /Discard
+
 exit /b 1
+
+:checkInstall
+set "_pp=%~1\update.mum"
+set "_var=%~2"
+if not exist "%_pp%" exit /b
+
+:: WinPE supported?
+if /i "!edition!"=="WindowsPE" if /i not "%_pp:~-15%"=="-LCU\update.mum" (
+  findstr /im "WinPE" "%_pp%" || (echo "%_pp:~-11%" doesn't support WinPE & exit /b)
+  findstr /im "WinPE-NetFx-Package" "%_pp%" && exit /b 1
+)
+:: skip installed packages
+for /f "tokens=3 delims== " %%x in ('findstr /i "Package_for_KB" "%_pp%"') do (
+  if exist "..\mount\Windows\servicing\Packages\%%~x~*.mum" (echo "%%~x" was installed & exit /b 1)
+)
+
+set "%_var%=!%_var%! /PackagePath:"%_pp%""
+exit /b
+
+:sbsConfig
+reg load HKLM\zSOFTWARE mount\Windows\System32\config\SOFTWARE
+
+for %%x in (SupersededActions DisableResetbase DisableComponentBackups) do (
+  if not "%~1"=="" reg add HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration /v %%x /t REG_DWORD /d "%~1" /f
+  shift
+)
+reg query HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration
+
+reg unload HKLM\zSOFTWARE
+exit /b
+
+:latentESU
+if exist mount\Windows\WinSxS\Manifests\amd64_microsoft-windows-s..edsecurityupdatesai_*.manifest exit /b
+
+gsudo -s copy tmp\amd64_microsoft-windows-s..edsecurityupdatesai_*.manifest mount\Windows\WinSxS\Manifests\
+
+reg load HKLM\zCOMPONENTS mount\Windows\System32\config\COMPONENTS
+reg load HKLM\zSOFTWARE mount\Windows\System32\config\SOFTWARE
+
+reg import tmp\ExtendedSecurityUpdatesAI.reg
+for /f "delims=" %%x in ('reg query HKLM\zCOMPONENTS\DerivedData\VersionedIndex ^| find /i "VersionedIndex"') do reg delete "%%x" /f
+
+reg unload HKLM\zSOFTWARE
+reg unload HKLM\zCOMPONENTS
+exit /b
 
 :processDVD
 :: TODO update DVD files
