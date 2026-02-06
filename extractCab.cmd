@@ -18,7 +18,7 @@ where 7z >nul 2>&1 || (
 :: is DU?
 7z l -ba "uup\%cabFile%" update.mum | find /i ".mum" || exit /b
 
-set "cabId=%cabId:*-KB=KB%" & set "cabId=!cabId:*-kb=KB!"
+set "cabId=%cabId:*-KB=KB%"
 echo Expand cab "%cabFile%" to "%cabId%"
 
 :ExpandCab

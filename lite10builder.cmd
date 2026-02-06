@@ -44,7 +44,7 @@ if exist dvd\ rmdir /s /q dvd
 set arch=x86
 
 if /i "%SourceFile:~-4%"==".wim" (
-  7z l -ba "%SourceFile%" Windows/SysWOW64/expand.* 1/Windows/SysWOW64/expand.* | find /i "expand." && set arch=x64
+  wimlib-imagex info "%SourceFile%" 1 | findstr /ie "Architecture.*64" && set arch=x64
   call :prepareUUP
 
   call :processWIM "%SourceFile%"
@@ -77,17 +77,16 @@ exit /b
 
 :processWIM
 :: process WinRE first
-7z e -ba -aoa "%~1" Windows/System32/Recovery/Winre.wim 1/Windows/System32/Recovery/Winre.wim | findstr /b /c:"No files" || (
-  call :processWIM Winre.wim
-)
+wimlib-imagex extract "%~1" 1 Windows/System32/Recovery/Winre.wim --no-acls && call :processWIM Winre.wim
 
 set "wimFile=%~1"
 echo Process WIM file "%wimFile%"
 
 :: number of images
 set _count=1
-for /f "tokens=2 delims== " %%a in ('7z l "%wimFile%" *.xml ^| findstr /r /c:"^Images *="') do set /a "_count=%%a"
+for /f "tokens=3 delims== " %%a in ('wimlib-imagex info "%wimFile%" --header ^| find /i "Image Count"') do set /a "_count=%%a"
 
+set _oIndex=
 for /l %%i in (1,1,%_count%) do (
   set _build=
   set edition=
@@ -104,9 +103,11 @@ for /l %%i in (1,1,%_count%) do (
     if /i "%%a"=="Architecture" if /i not "%arch%"=="%%b" (set "arch=%%b" & call :prepareUUP)
   )
 
-  if defined OSWimIndex if not "%%i"=="%OSWimIndex%" if /i not "!edition!"=="WindowsPE" set edition=
+  if defined OSWimIndex if /i not "!edition!"=="WindowsPE" if "%%i"=="%OSWimIndex%" (set "_oIndex=%%i") else (set "edition=")
   if not "!edition!"=="" call :updateWIM %%i
 )
+
+call :optimizeWIM "%_oIndex%"
 exit /b
 
 :updateWIM
@@ -116,20 +117,46 @@ echo Update "!edition!.!_build!" image "%wimFile%:%_index%"
 if exist mount\* rmdir /s /q mount
 if not exist mount\ mkdir mount
 
+::mkdir mount\Windows\WinSxS\Manifests
+::wimlib-imagex extract "%wimFile%" %_index% Windows/servicing/Packages/Package_for_KB*.mum Windows/System32/config/COMPONENTS* Windows/System32/config/SOFTWARE* --dest-dir=mount --preserve-dir-structure --no-acls
 Dism /Mount-Image /ImageFile:"%wimFile%" /Index:%_index% /MountDir:mount /Optimize || exit /b 2
 
 :: pre-update
 if /i "!edition!"=="WindowsPE" (
   echo call :sbsConfig "" "" 1
 ) else (
-  :: TODO switch edition
+  :: switch edition
+  if defined TargetEdition Dism /English /Image:mount /Get-TargetEditions | find /i "%TargetEdition:*,=%" && (
+    if "%TargetEdition:,=%"=="%TargetEdition%" (
+      Dism /Image:mount /Set-Edition:"%TargetEdition%" || goto :Discard
+    ) else (
+      Dism /Image:mount /ProductKey:"%TargetEdition:,=" /Set-Edition:"%" /AcceptEula || goto :Discard
+    )
+  )
+
   :: manage features and packages
+  if defined RemoveCapabilities for %%a in (%RemoveCapabilities%) do (
+    set "_a=%%a"
+    Dism /ScratchDir:tmp /Image:mount /Remove-Capability /CapabilityName:"!_a:,=" /CapabilityName:"!" || goto :Discard
+  )
+  if defined DisableFeatures for %%a in (%DisableFeatures%) do (
+    set "_a=%%a"
+    Dism /ScratchDir:tmp /Image:mount /Disable-Feature /FeatureName:"!_a:,=" /FeatureName:"!" /Remove || goto :Discard
+  )
+  if defined AddCapabilities for %%a in (%AddCapabilities%) do (
+    set "_a=%%a"
+    Dism /ScratchDir:tmp /Image:mount /Add-Capability /CapabilityName:"!_a:,=" /CapabilityName:"!" || goto :Discard
+  )
+  if defined EnableFeatures for %%a in (%EnableFeatures%) do (
+    set "_a=%%a"
+    Dism /ScratchDir:tmp /Image:mount /Enable-Feature /FeatureName:"!_a:,=" /FeatureName:"!" /All || goto :Discard
+  )
+
   :: ESU AI patching
   if !_build! geq 19041 if !_build! lss 19046 call :latentESU
 )
 
 pushd tmp
-
 :: ServicingStack first
 set "_pkgPath[0]="
 for /d %%k in ("KB*-%arch%-SSU") do call :checkInstall "%%k" "_pkgPath[0]"
@@ -153,13 +180,23 @@ set "_pkgPath[3]="
 for /d %%k in ("KB*-%arch%-LCU") do call :checkInstall "%%k" "_pkgPath[3]"
 
 for /l %%n in (0,1,3) do if not "!_pkgPath[%%n]!"=="" (
+  echo Offline installing "!_pkgPath[%%n]!"
   Dism /ScratchDir:. /Image:..\mount /Add-Package !_pkgPath[%%n]! || goto :Discard
 )
 popd
 
+if /i "!edition!"=="WindowsPE" (
+  call :meltdownSpectre & call :sbsConfig 3 "" 1
+) else (
+  :: allow rebase
+  call :sbsConfig 3 0
+)
 Dism /ScratchDir:tmp /Image:mount /Cleanup-Image /StartComponentCleanup /ResetBase || goto :Discard
 
-:: cleanup manually
+:: TODO cleanup manually
+:: Defender
+::7z x -ba uup\defender-dism-%arch%.cab -o"mount\ProgramData\Microsoft\Windows Defender" -x^^!*.xml -xr^^!MpSigStub.exe
+
 Dism /Unmount-Image /MountDir:mount /Commit
 
 exit /b
@@ -177,7 +214,7 @@ if not exist "%_pp%" exit /b
 
 :: WinPE supported?
 if /i "!edition!"=="WindowsPE" if /i not "%_pp:~-15%"=="-LCU\update.mum" (
-  findstr /im "WinPE" "%_pp%" || (echo "%_pp:~-11%" doesn't support WinPE & exit /b)
+  findstr /im "WinPE" "%_pp%" || (echo "%_pp:~0,-11%" not support WinPE & exit /b)
   findstr /im "WinPE-NetFx-Package" "%_pp%" && exit /b 1
 )
 :: skip installed packages
@@ -191,13 +228,14 @@ exit /b
 :sbsConfig
 reg load HKLM\zSOFTWARE mount\Windows\System32\config\SOFTWARE
 
-for %%x in (SupersededActions DisableResetbase DisableComponentBackups) do (
-  if not "%~1"=="" reg add HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration /v %%x /t REG_DWORD /d "%~1" /f
-  shift
-)
-reg query HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration
+:: reg query HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration
+for %%x in (SupersededActions DisableResetbase DisableComponentBackups) do (call :sbsConfigImpl %%x "%%~1" & shift)
 
 reg unload HKLM\zSOFTWARE
+exit /b
+
+:sbsConfigImpl
+if not "%~2"=="" reg add HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration /v "%~1" /t REG_DWORD /d "%~2" /f
 exit /b
 
 :latentESU
@@ -213,6 +251,23 @@ for /f "delims=" %%x in ('reg query HKLM\zCOMPONENTS\DerivedData\VersionedIndex 
 
 reg unload HKLM\zSOFTWARE
 reg unload HKLM\zCOMPONENTS
+exit /b
+
+:meltdownSpectre
+reg load HKLM\zSYSTEM mount\Windows\System32\config\SYSTEM
+
+:: reg query "HKLM\zSYSTEM\ControlSet001\Control\Session Manager\Memory Management"
+reg import tmp\SpectreMeltdownVulnerability.reg
+
+reg unload HKLM\zSYSTEM
+exit /b
+
+:optimizeWIM
+if "%~1"=="" (
+  wimlib-imagex optimize "%wimFile%"
+) else (
+  wimlib-imagex export "%wimFile%" "%~1" temp.wim && move /y temp.wim "%wimFile%"
+)
 exit /b
 
 :processDVD
