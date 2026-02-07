@@ -77,7 +77,8 @@ exit /b
 
 :processWIM
 :: process WinRE first
-wimlib-imagex extract "%~1" 1 Windows/System32/Recovery/Winre.wim --no-acls && call :processWIM Winre.wim
+if defined OSWimIndex (set "_oIndex=%OSWimIndex%") else (set _oIndex=1)
+wimlib-imagex extract "%~1" "%_oIndex%" Windows/System32/Recovery/Winre.wim --no-acls && call :processWIM Winre.wim
 
 set "wimFile=%~1"
 echo Process WIM file "%wimFile%"
@@ -198,10 +199,23 @@ call :cleanManual
 :: update Defender & MRT
 if /i not "!edition!"=="WindowsPE" call :updateDefender
 
-:: TODO optimize big hive file
-:: pushd mount && del /f /q /a /s *.regtrans-ms *.TM.blf & popd
+:: update DVD files: mount\Windows\system32\{UpdateAgent,Facilitator,ServicingCommon}.dll
+:: if exist mount\sources\setup.exe call :updateDvdBoot
+
+if exist mount\Windows\System32\Recovery\Winre.wim if exist Winre.wim (
+  forfiles /m mount\Windows\System32\Recovery\Winre.wim /d 0 || copy /b /y Winre.wim mount\Windows\System32\Recovery\
+)
+
+:: install drivers
+if /i "!edition!"=="WindowsPE" (set "_dTypes=ALL WinPE") else (set "_dTypes=ALL OS")
+for %%a in (%_dTypes%) do call :tryInstallDrv "drvs\%%a" || goto :Discard
+
+:: optimize hive files
+call :optimizeHive SOFTWARE SYSTEM COMPONENTS DRIVERS mount\Windows\System32\SMI\Store\Machine\SCHEMA.DAT
+pushd mount && (del /f /q /a /s *.regtrans-ms *.TM.blf & popd)
 
 Dism /Unmount-Image /MountDir:mount /Commit
+
 
 exit /b
 
@@ -210,6 +224,13 @@ popd 2>nul
 Dism /Unmount-Image /MountDir:mount /Discard
 
 exit /b 1
+
+:tryInstallDrv
+for /r "%~1\" %%x in (*.inf) do (
+  Dism /ScratchDir:tmp /Image:mount /Add-Driver /Driver:"%~1" /Recurse || exit /b !ERRORLEVEL!
+  exit /b
+)
+exit /b
 
 :checkInstall
 set "_pp=%~1\update.mum"
@@ -308,6 +329,17 @@ for /d %%a in ("mount\ProgramData\Microsoft\Windows Defender\Platform\*.*.*") do
   )
 )
 exit /b
+
+:optimizeHive
+set "_a=%~1" & if "!_a!"=="" exit /b
+if "%~nx1"=="!_a!" set "_a=mount\Windows\System32\config\!_a!"
+
+reg load HKLM\TEMP "!_a!"
+reg save HKLM\TEMP temp.hiv /c /f
+reg unload HKLM\TEMP
+
+dir /a /q "!_a!*" & del /f temp.hiv & copy /b /y "!_a!.LOG1" "!_a!.LOG2"
+shift & goto :optimizeHive
 
 :optimizeWIM
 if "%~1"=="" (
