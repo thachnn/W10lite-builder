@@ -191,11 +191,15 @@ if /i "!edition!"=="WindowsPE" (
   :: allow rebase
   call :sbsConfig 3 0
 )
-Dism /ScratchDir:tmp /Image:mount /Cleanup-Image /StartComponentCleanup /ResetBase || goto :Discard
 
-:: TODO cleanup manually
-:: Defender
-::7z x -ba uup\defender-dism-%arch%.cab -o"mount\ProgramData\Microsoft\Windows Defender" -x^^!*.xml -xr^^!MpSigStub.exe
+Dism /ScratchDir:tmp /Image:mount /Cleanup-Image /StartComponentCleanup /ResetBase || goto :Discard
+call :cleanManual
+
+:: update Defender & MRT
+if /i not "!edition!"=="WindowsPE" call :updateDefender
+
+:: TODO optimize big hive file
+:: pushd mount && del /f /q /a /s *.regtrans-ms *.TM.blf & popd
 
 Dism /Unmount-Image /MountDir:mount /Commit
 
@@ -260,6 +264,49 @@ reg load HKLM\zSYSTEM mount\Windows\System32\config\SYSTEM
 reg import tmp\SpectreMeltdownVulnerability.reg
 
 reg unload HKLM\zSYSTEM
+exit /b
+
+:cleanManual
+if exist mount\Windows\WinSxS\ManifestCache\*.bin gsudo -s del /f /q mount\Windows\WinSxS\ManifestCache\*.bin
+if exist mount\Windows\WinSxS\Temp\PendingDeletes\* gsudo -s del /f /q mount\Windows\WinSxS\Temp\PendingDeletes\*
+if exist mount\Windows\WinSxS\Temp\TransformerRollbackData\* gsudo -s del /f /q /s mount\Windows\WinSxS\Temp\TransformerRollbackData\*
+
+if exist mount\Windows\INF\*.log del /f /q mount\Windows\INF\*.log
+for /d %%x in (mount\Windows\CbsTemp\* mount\Windows\Temp\*) do rmdir /s /q "%%x"
+del /f /q mount\Windows\CbsTemp\* mount\Windows\Temp\*
+
+if exist mount\Windows\WinSxS\pending.xml exit /b
+for /d %%x in (mount\Windows\WinSxS\Temp\InFlight\*) do gsudo -s rmdir /s /q "%%x"
+if exist mount\Windows\WinSxS\Temp\PendingRenames\* gsudo -s del /f /q mount\Windows\WinSxS\Temp\PendingRenames\*
+
+exit /b
+
+:updateDefender
+:: for MRT
+set "_mpam=" & for %%x in ("uup\*kb890830-%arch%*.exe") do set "_mpam=%%x"
+if not "%_mpam%"=="" 7z x -ba -aoa "%_mpam%" -omount\Windows\System32
+
+set "_mpam=" & for %%x in ("uup\*defender-dism*%arch%*.cab") do set "_mpam=%%x"
+if "%_mpam%"=="" exit /b
+if exist "mount\ProgramData\Microsoft\Windows Defender\Definition Updates\Updates\*.vdm" (echo Defender seems updated & exit /b)
+
+7z x -ba "%_mpam%" -o"mount\ProgramData\Microsoft\Windows Defender" -x^^!*defender*.xml -xr^^!MpSigStub.exe
+:: for old updates
+for /d %%a in ("mount\ProgramData\Microsoft\Windows Defender\Platform\*.*.*") do (
+  for %%x in (ConfigSecurityPolicy.exe MpAsDesc.dll MpEvMsg.dll ProtectionManagement.dll MpUxAgent.dll) do (
+    if not exist "%%a\%%x" copy /b "mount\Program Files\Windows Defender\%%x" "%%a\"
+  )
+  for /d %%k in ("mount\Program Files\Windows Defender\*-*") do for %%x in (MpAsDesc.dll MpEvMsg.dll ProtectionManagement.dll MpUxAgent.dll) do (
+    if not exist "%%a\%%~nxk\%%x.mui" xcopy /ki "%%k\%%x.mui" "%%a\%%~nxk\"
+  )
+
+  if /i not "%arch%"=="x86" (
+    if not exist "%%a\x86\MpAsDesc.dll" copy /b "mount\Program Files (x86)\Windows Defender\MpAsDesc.dll" "%%a\x86\"
+    for /d %%k in ("mount\Program Files (x86)\Windows Defender\*-*") do (
+      if not exist "%%a\x86\%%~nxk\MpAsDesc.dll.mui" xcopy /ki "%%k\MpAsDesc.dll.mui" "%%a\x86\%%~nxk\"
+    )
+  )
+)
 exit /b
 
 :optimizeWIM
