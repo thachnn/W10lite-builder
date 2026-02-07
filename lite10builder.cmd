@@ -119,7 +119,7 @@ if exist mount\* rmdir /s /q mount
 if not exist mount\ mkdir mount
 
 ::mkdir mount\Windows\WinSxS\Manifests
-::wimlib-imagex extract "%wimFile%" %_index% Windows/servicing/Packages/Package_for_KB*.mum Windows/System32/config/COMPONENTS* Windows/System32/config/SOFTWARE* --dest-dir=mount --preserve-dir-structure --no-acls
+::wimlib-imagex extract "%wimFile%" %_index% Windows/servicing/Packages/Package_for_*.mum Windows/System32/config Windows/System32/SMI/Store/Machine --dest-dir=mount --preserve-dir-structure --no-acls
 Dism /Mount-Image /ImageFile:"%wimFile%" /Index:%_index% /MountDir:mount /Optimize || exit /b 2
 
 :: pre-update
@@ -243,8 +243,8 @@ if /i "!edition!"=="WindowsPE" if /i not "%_pp:~-15%"=="-LCU\update.mum" (
   findstr /im "WinPE-NetFx-Package" "%_pp%" && exit /b 1
 )
 :: skip installed packages
-for /f "tokens=3 delims== " %%x in ('findstr /i "Package_for_KB" "%_pp%"') do (
-  if exist "..\mount\Windows\servicing\Packages\%%~x~*.mum" (echo "%%~x" was installed & exit /b 1)
+if /i "%_pp:~0,2%"=="KB" for /f "delims=-" %%x in ("%_pp%") (
+  findstr /im "\<%%x\>" "..\mount\Windows\servicing\Packages\Package_for_*.mum" && exit /b 1
 )
 
 set "%_var%=!%_var%! /PackagePath:"%_pp%""
