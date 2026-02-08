@@ -31,7 +31,7 @@ if exist *.iso (if not exist *.aria2 goto :Downloaded) else if exist *.wim (goto
 if not defined SourceFileUrl set "SourceFileUrl=https://archive.org/download/en-us_windows_10_enterprise_ltsc_2021_x64_dvd_d289cf96_202112/en-us_windows_10_enterprise_ltsc_2021_x64_dvd_d289cf96.iso"
 echo Download ISO from URL "%SourceFileUrl%"
 
-aria2c --file-allocation=prealloc -c -R "%SourceFileUrl%"
+aria2c --file-allocation=trunc -c -R "%SourceFileUrl%"
 
 :Downloaded
 for %%i in (*.wim *.iso) do set "SourceFile=%%i"
@@ -57,9 +57,10 @@ if /i "%SourceFile:~-4%"==".wim" (
 
   if exist dvd\efi\boot\*x64.efi set arch=x64
   call :prepareUUP
+  for %%i in ("uup\*-!arch!-SetupDU*.cab") do call :updateDVD "%%i"
 
   for %%i in (dvd\sources\install.wim dvd\sources\boot.wim) do call :processWIM "%%i"
-  call :processDVD
+  call :createISO
 ) else (
   echo Unsupported file type & exit /b 2
 )
@@ -77,8 +78,10 @@ exit /b
 
 :processWIM
 :: process WinRE first
-if defined OSWimIndex (set "_oIndex=%OSWimIndex%") else (set _oIndex=1)
-wimlib-imagex extract "%~1" "%_oIndex%" Windows/System32/Recovery/Winre.wim --no-acls && call :processWIM Winre.wim
+if /i not "%~1"=="Winre.wim" (
+  if defined OSWimIndex (set "_oIndex=%OSWimIndex%") else (set _oIndex=1)
+  wimlib-imagex extract "%~1" "!_oIndex!" Windows/System32/Recovery/Winre.wim --no-acls 2>nul && call :processWIM Winre.wim
+)
 
 set "wimFile=%~1"
 echo Process WIM file "%wimFile%"
@@ -119,7 +122,7 @@ if exist mount\* rmdir /s /q mount
 if not exist mount\ mkdir mount
 
 ::mkdir mount\Windows\WinSxS\Manifests
-::wimlib-imagex extract "%wimFile%" %_index% Windows/servicing/Packages/Package_for_*.mum Windows/System32/config Windows/System32/SMI/Store/Machine --dest-dir=mount --preserve-dir-structure --no-acls
+::wimlib-imagex extract "%wimFile%" %_index% Windows/servicing/Packages/Package_for_*.mum Windows/System32/config Windows/System32/Recovery Windows/System32/SMI/Store/Machine Windows/System32/UpdateAgent.* Windows/System32/Facilitator.* sources --dest-dir=mount --preserve-dir-structure --nullglob --no-acls
 Dism /Mount-Image /ImageFile:"%wimFile%" /Index:%_index% /MountDir:mount /Optimize || exit /b 2
 
 :: pre-update
@@ -199,11 +202,12 @@ call :cleanManual
 :: update Defender & MRT
 if /i not "!edition!"=="WindowsPE" call :updateDefender
 
-:: update DVD files: mount\Windows\system32\{UpdateAgent,Facilitator,ServicingCommon}.dll
-:: if exist mount\sources\setup.exe call :updateDvdBoot
+:: update ISO files
+for %%k in (UpdateAgent.dll Facilitator.dll ServicingCommon.dll) do call :updateDVD "%%k" mount\Windows\System32
+if exist mount\sources\setup.exe call :updateDVDboot
 
-if exist mount\Windows\System32\Recovery\Winre.wim if exist Winre.wim (
-  forfiles /m mount\Windows\System32\Recovery\Winre.wim /d 0 || copy /b /y Winre.wim mount\Windows\System32\Recovery\
+if /i not "%wimFile%"=="Winre.wim" if exist mount\Windows\System32\Recovery\Winre.wim if exist Winre.wim (
+  xcopy /kdry Winre.wim mount\Windows\System32\Recovery\
 )
 
 :: install drivers
@@ -212,11 +216,9 @@ for %%a in (%_dTypes%) do call :tryInstallDrv "drvs\%%a" || goto :Discard
 
 :: optimize hive files
 call :optimizeHive SOFTWARE SYSTEM COMPONENTS DRIVERS mount\Windows\System32\SMI\Store\Machine\SCHEMA.DAT
-pushd mount && (del /f /q /a /s *.regtrans-ms *.TM.blf & popd)
+pushd mount & del /f /q /a /s *.regtrans-ms *.TM.blf & popd
 
 Dism /Unmount-Image /MountDir:mount /Commit
-
-
 exit /b
 
 :Discard
@@ -234,20 +236,26 @@ exit /b
 
 :checkInstall
 set "_pp=%~1\update.mum"
-set "_var=%~2"
 if not exist "%_pp%" exit /b
 
+set "_dir=%~nx1"
+set "_var=%~2"
+
 :: WinPE supported?
-if /i "!edition!"=="WindowsPE" if /i not "%_pp:~-15%"=="-LCU\update.mum" (
-  findstr /im "WinPE" "%_pp%" || (echo "%_pp:~0,-11%" not support WinPE & exit /b)
-  findstr /im "WinPE-NetFx-Package" "%_pp%" && exit /b 1
+if /i "!edition!"=="WindowsPE" if /i not "%_dir:~-4%"=="-SSU" if /i not "%_dir:~-7%"=="-SafeOS" if /i not "%_dir:~-4%"=="-LCU" (
+  rem if /i "%_dir:~-6%"=="-NetFX" exit /b
+  findstr /im "WinPE" "%_pp%" || (echo "%_dir%" not support WinPE & exit /b)
+  rem findstr /im "WinPE-NetFx-Package" "%_pp%" && exit /b 1
 )
 :: skip installed packages
-if /i "%_pp:~0,2%"=="KB" for /f "delims=-" %%x in ("%_pp%") (
+if /i "%_dir:~0,2%"=="KB" for /f "delims=-" %%x in ("%_dir%") do (
   findstr /im "\<%%x\>" "..\mount\Windows\servicing\Packages\Package_for_*.mum" && exit /b 1
 )
 
-set "%_var%=!%_var%! /PackagePath:"%_pp%""
+if /i not "%_dir:~-4%"=="-SSU" if /i not "%_dir:~-7%"=="-SafeOS" if /i not "%_dir:~-4%"=="-LCU" (
+  set "%_var%=!%_var%! /PackagePath:"%_pp%"" & exit /b
+)
+set "%_var%=/PackagePath:"%_pp%""
 exit /b
 
 :sbsConfig
@@ -294,7 +302,7 @@ if exist mount\Windows\WinSxS\Temp\TransformerRollbackData\* gsudo -s del /f /q 
 
 if exist mount\Windows\INF\*.log del /f /q mount\Windows\INF\*.log
 for /d %%x in (mount\Windows\CbsTemp\* mount\Windows\Temp\*) do rmdir /s /q "%%x"
-del /f /q mount\Windows\CbsTemp\* mount\Windows\Temp\*
+del /f /q mount\Windows\CbsTemp\* mount\Windows\Temp\* 2>nul
 
 if exist mount\Windows\WinSxS\pending.xml exit /b
 for /d %%x in (mount\Windows\WinSxS\Temp\InFlight\*) do gsudo -s rmdir /s /q "%%x"
@@ -305,7 +313,7 @@ exit /b
 :updateDefender
 :: for MRT
 set "_mpam=" & for %%x in ("uup\*kb890830-%arch%*.exe") do set "_mpam=%%x"
-if not "%_mpam%"=="" 7z x -ba -aoa "%_mpam%" -omount\Windows\System32
+if not "%_mpam%"=="" 7z x -ba -aoa "%_mpam%" -omount\Windows\System32 && dir /a /q mount\Windows\System32\mrt*
 
 set "_mpam=" & for %%x in ("uup\*defender-dism*%arch%*.cab") do set "_mpam=%%x"
 if "%_mpam%"=="" exit /b
@@ -334,11 +342,10 @@ exit /b
 set "_a=%~1" & if "!_a!"=="" exit /b
 if "%~nx1"=="!_a!" set "_a=mount\Windows\System32\config\!_a!"
 
-reg load HKLM\TEMP "!_a!"
-reg save HKLM\TEMP temp.hiv /c /f
-reg unload HKLM\TEMP
+dir /a /q "!_a!*"
+reg load HKLM\TEMP "!_a!" && (reg save HKLM\TEMP temp.hiv /c /f & reg unload HKLM\TEMP)
+move /y temp.hiv "!_a!" && del /f /a "!_a!.LOG?"
 
-dir /a /q "!_a!*" & del /f temp.hiv & copy /b /y "!_a!.LOG1" "!_a!.LOG2"
 shift & goto :optimizeHive
 
 :optimizeWIM
@@ -349,10 +356,46 @@ if "%~1"=="" (
 )
 exit /b
 
-:processDVD
-:: TODO update DVD files
+:updateDVD
+if not defined TargetISO exit /b 2
+if not exist dvd\sources\ exit /b 1
 
-if defined TargetISO (
-  echo Make target ISO "%TargetISO%"
+echo Update DVD files: "%~1" "%~2"
+if not "%~2"=="" (
+  :: from a sources file
+  if exist "%~2\%~1" call :copyIfNewer "%~2\%~1" "dvd\sources\%~1"
+) else if /i "%~x1"==".cab" (
+  :: update DVD from Setup DU
+  set "_a=" & for /f "delims=" %%a in ('dir /b /a dvd\sources\*.') do set "_a=!_a! "%%a""
+  7z x -ba -aoa "%~1" -odvd\sources *.* !_a!
+) else if exist "%~1\" (
+  :: or from a sources dir
+  for /r "%~1" %%a in (*) do (set "_a=%%a" & call :copyIfNewer "!_a!" "dvd\sources\!_a:%~f1\=!")
 )
+
+exit /b
+
+:copyIfNewer
+if not exist "%~2" exit /b 1
+
+:: compare file versions
+powershell -nop -c "exit (gi '%~1').VersionInfo.FileVersionRaw.CompareTo((gi '%~2').VersionInfo.FileVersionRaw)"
+if errorlevel 1 (
+  echo "%~1" & copy /b /y "%~1" "%~2"
+) else if errorlevel 0 (
+  fc /b "%~1" "%~2" >nul || xcopy /kdry "%~1" "%~2"
+)
+
+exit /b
+
+:updateDVDboot
+call :updateDVD mount\sources || exit /b !ERRORLEVEL!
+
+:: TODO update efi\boot
+exit /b
+
+:createISO
+if not defined TargetISO exit /b 2
+echo Make target ISO "%TargetISO%"
+
 exit /b

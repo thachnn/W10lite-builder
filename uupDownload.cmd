@@ -41,7 +41,7 @@ for /f "delims=?" %%a in ("%url%") do set "crc=%%~na"
 echo "%crc%" | findstr /i "_[0-9a-f][0-9a-f]*""" && (set "crc=%crc:*_=%" & set "crc=--checksum="sha-1=!crc:*_=!"") || (set "crc=")
 
 echo aria2c %crc%
-aria2c %crc% --file-allocation=none -c -R -o "tmp\%outFile%" "%url%"
+aria2c %crc% --file-allocation=trunc -c -R -o "tmp\%outFile%" "%url%"
 
 :Downloaded
 echo Try to extract cab from "%outFile%"
