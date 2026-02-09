@@ -37,7 +37,7 @@ if exist "tmp\%outFile%" if not exist "tmp\%outFile%.aria2" goto :Downloaded
 echo Download file "%outFile%"
 
 :: extract hash from URL
-for /f "delims=?" %%a in ("%url%") do set "crc=%%~na"
+for /f "delims=?" %%k in ("%url%") do set "crc=%%~nk"
 echo "%crc%" | findstr /i "_[0-9a-f][0-9a-f]*""" && (set "crc=%crc:*_=%" & set "crc=--checksum="sha-1=!crc:*_=!"") || (set "crc=")
 
 echo aria2c %crc%

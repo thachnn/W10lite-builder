@@ -26,7 +26,7 @@ for /f "usebackq tokens=1* delims==" %%a in ("%~n0.ini") do if not "%%a"=="" (
 
 if defined SourceFile goto :HasSource
 :: try to download source file
-if exist *.iso (if not exist *.aria2 goto :Downloaded) else if exist *.wim (goto :Downloaded)
+if exist *.iso (if not exist *.aria2 goto :Downloaded) else if exist *.wim goto :Downloaded
 
 if not defined SourceFileUrl set "SourceFileUrl=https://archive.org/download/en-us_windows_10_enterprise_ltsc_2021_x64_dvd_d289cf96_202112/en-us_windows_10_enterprise_ltsc_2021_x64_dvd_d289cf96.iso"
 echo Download ISO from URL "%SourceFileUrl%"
@@ -40,13 +40,9 @@ for %%i in (*.wim *.iso) do set "SourceFile=%%i"
 echo Source file "%SourceFile%"
 if exist dvd\ rmdir /s /q dvd
 
-:: image arch
-set arch=x86
-
+set arch=
+:: process a specified WIM file
 if /i "%SourceFile:~-4%"==".wim" (
-  wimlib-imagex info "%SourceFile%" 1 | findstr /ie "Architecture.*64" && set arch=x64
-  call :prepareUUP
-
   call :processWIM "%SourceFile%"
 ) else if /i "%SourceFile:~-4%"==".iso" (
   :: verify source ISO file
@@ -55,11 +51,13 @@ if /i "%SourceFile:~-4%"==".wim" (
   )
   7z x -ba -aos "%SourceFile%" -odvd
 
-  if exist dvd\efi\boot\*x64.efi set arch=x64
+  if exist dvd\efi\boot\*x64.efi (set arch=x64) else if exist dvd\efi\boot\*64.efi (set arch=arm64) else (set arch=x86)
   call :prepareUUP
-  for %%i in ("uup\*-!arch!-SetupDU*.cab") do call :updateDVD "%%i"
 
-  for %%i in (dvd\sources\install.wim dvd\sources\boot.wim) do call :processWIM "%%i"
+  set "_duCab=" & for %%i in ("uup\*-!arch!-SetupDU*.cab") do set "_duCab=%%i"
+  call :updateDVD "!_duCab!"
+
+  for %%f in (dvd\sources\install.wim dvd\sources\boot.wim) do call :processWIM "%%f"
   call :createISO
 ) else (
   echo Unsupported file type & exit /b 2
@@ -71,7 +69,7 @@ goto :eof
 :prepareUUP
 for /d %%i in ("tmp\KB*-%arch%*") do if exist "%%i\update.mum" exit /b
 
-call uupDownload.cmd %arch% "%uupVer%"
+call uupDownload.cmd "%arch%" "%uupVer%"
 for %%i in ("uup\*-%arch%*.cab") do call extractCab.cmd "%%~nxi"
 
 exit /b
@@ -80,7 +78,7 @@ exit /b
 :: process WinRE first
 if /i not "%~1"=="Winre.wim" (
   if defined OSWimIndex (set "_oIndex=%OSWimIndex%") else (set _oIndex=1)
-  wimlib-imagex extract "%~1" "!_oIndex!" Windows/System32/Recovery/Winre.wim --no-acls 2>nul && call :processWIM Winre.wim
+  wimlib-imagex extract "%~1" "!_oIndex!" Windows/System32/Recovery/Winre.wim 2>nul && call :processWIM Winre.wim
 )
 
 set "wimFile=%~1"
@@ -94,24 +92,42 @@ set _oIndex=
 for /l %%i in (1,1,%_count%) do (
   set _build=
   set edition=
+  set "_pa=%arch%"
 
   :: WIM info
-  for /f "tokens=1* delims=: " %%a in ('Dism /English /Get-ImageInfo /ImageFile:"%wimFile%" /Index:%%i ^| find " :" ^| sort /r') do (
-    if /i "%%a"=="Version" (
-      if "%%~nb"=="10.0" (set "_b=%%b" & if !_b:~5! geq 17763 set "_build=!_b:~5!")
-      if "!_build!"=="" (echo Unsupported version "%%b" & exit /b)
-    )
-    if /i "%%a"=="ProductType" if /i not "%%b"=="WinNT" (echo Unsupported product type "%%b" & exit /b)
+  for /f "tokens=1* delims=:" %%a in ('wimlib-imagex info "%wimFile%" %%i ^| findstr /i "Arch Build Version Type"') do (
+    set "_b=%%b" & set "_b=!_b: =!"
 
-    if /i "%%a"=="Installation" set "edition=%%b"
-    if /i "%%a"=="Architecture" if /i not "%arch%"=="%%b" (set "arch=%%b" & call :prepareUUP)
+    if /i "%%a"=="Major Version" if !_b! neq 10 (echo Unsupported version "!_b!" & set "edition=-")
+    if /i "%%a"=="Build" if !_b! geq 17763 (set "_build=!_b!") else (echo Unsupported build "!_b!" & set "edition=-")
+    if /i "%%a"=="Product Type" if /i not "!_b!"=="WinNT" (echo Unsupported product type "!_b!" & set "edition=-")
+
+    if /i "%%a"=="Installation Type" if "!edition!"=="" set "edition=!_b!"
+    if /i "%%a"=="Architecture" (set "arch=!_b:86_=!" & set "arch=!arch:ARM=arm!")
   )
 
-  if defined OSWimIndex if /i not "!edition!"=="WindowsPE" if "%%i"=="%OSWimIndex%" (set "_oIndex=%%i") else (set "edition=")
-  if not "!edition!"=="" call :updateWIM %%i
+  if "!edition!"=="-" (set "edition=") else if /i "!edition!"=="WindowsPE" (
+    if defined PEWimIndex if "%%i"=="%PEWimIndex%" (set "_oIndex=%%i") else (set "edition=")
+  ) else (
+    if defined OSWimIndex if "%%i"=="%OSWimIndex%" (set "_oIndex=%%i") else (set "edition=")
+  )
+
+  :: arch changed?
+  if "!edition!"=="" (set "arch=!_pa!") else (
+    if /i not "!arch!"=="!_pa!" call :prepareUUP
+    call :updateWIM %%i
+  )
 )
 
 call :optimizeWIM "%_oIndex%"
+exit /b
+
+:optimizeWIM
+if "%~1"=="" (
+  wimlib-imagex optimize "%wimFile%"
+) else (
+  wimlib-imagex export "%wimFile%" "%~1" temp.wim && move /y temp.wim "%wimFile%"
+)
 exit /b
 
 :updateWIM
@@ -129,32 +145,10 @@ Dism /Mount-Image /ImageFile:"%wimFile%" /Index:%_index% /MountDir:mount /Optimi
 if /i "!edition!"=="WindowsPE" (
   echo call :sbsConfig "" "" 1
 ) else (
-  :: switch edition
-  if defined TargetEdition Dism /English /Image:mount /Get-TargetEditions | find /i "%TargetEdition:*,=%" && (
-    if "%TargetEdition:,=%"=="%TargetEdition%" (
-      Dism /Image:mount /Set-Edition:"%TargetEdition%" || goto :Discard
-    ) else (
-      Dism /Image:mount /ProductKey:"%TargetEdition:,=" /Set-Edition:"%" /AcceptEula || goto :Discard
-    )
-  )
+  call :switchEdition || goto :Discard
 
   :: manage features and packages
-  if defined RemoveCapabilities for %%a in (%RemoveCapabilities%) do (
-    set "_a=%%a"
-    Dism /ScratchDir:tmp /Image:mount /Remove-Capability /CapabilityName:"!_a:,=" /CapabilityName:"!" || goto :Discard
-  )
-  if defined DisableFeatures for %%a in (%DisableFeatures%) do (
-    set "_a=%%a"
-    Dism /ScratchDir:tmp /Image:mount /Disable-Feature /FeatureName:"!_a:,=" /FeatureName:"!" /Remove || goto :Discard
-  )
-  if defined AddCapabilities for %%a in (%AddCapabilities%) do (
-    set "_a=%%a"
-    Dism /ScratchDir:tmp /Image:mount /Add-Capability /CapabilityName:"!_a:,=" /CapabilityName:"!" || goto :Discard
-  )
-  if defined EnableFeatures for %%a in (%EnableFeatures%) do (
-    set "_a=%%a"
-    Dism /ScratchDir:tmp /Image:mount /Enable-Feature /FeatureName:"!_a:,=" /FeatureName:"!" /All || goto :Discard
-  )
+  call :manageFeatures || goto :Discard
 
   :: ESU AI patching
   if !_build! geq 19041 if !_build! lss 19046 call :latentESU
@@ -186,12 +180,13 @@ for /d %%k in ("KB*-%arch%-LCU") do (
 
 for /l %%n in (0,1,%_n%) do if not "!_pkgPath[%%n]!"=="" (
   echo Offline installing "!_pkgPath[%%n]!"
-  Dism /ScratchDir:. /Image:..\mount /Add-Package !_pkgPath[%%n]! || goto :Discard
+  Dism /ScratchDir:. /Image:..\mount /Add-Package !_pkgPath[%%n]! || (popd & goto :Discard)
 )
 popd
 
 if /i "!edition!"=="WindowsPE" (
-  call :meltdownSpectre & call :sbsConfig 3 "" 1
+  call :meltdownSpectre
+  call :sbsConfig 3 "" 1
 ) else (
   :: allow rebase
   call :sbsConfig 3 0
@@ -223,10 +218,39 @@ Dism /Unmount-Image /MountDir:mount /Commit
 exit /b
 
 :Discard
-popd 2>nul
 Dism /Unmount-Image /MountDir:mount /Discard
-
 exit /b 1
+
+:switchEdition
+if not defined TargetEdition exit /b
+Dism /ScratchDir:tmp /Image:mount /Get-TargetEditions | find /i "%TargetEdition:*,=%" || exit /b
+
+if "%TargetEdition:,=%"=="%TargetEdition%" (
+  Dism /ScratchDir:tmp /Image:mount /Set-Edition:"%TargetEdition%" || exit /b !ERRORLEVEL!
+) else (
+  Dism /ScratchDir:tmp /Image:mount /ProductKey:"%TargetEdition:,=" /Set-Edition:"%" /AcceptEula || exit /b !ERRORLEVEL!
+)
+exit /b
+
+:manageFeatures
+if defined RemoveCapabilities for %%a in (%RemoveCapabilities%) do (
+  set "_a=%%a"
+  Dism /ScratchDir:tmp /Image:mount /Remove-Capability /CapabilityName:"!_a:,=" /CapabilityName:"!" || exit /b !ERRORLEVEL!
+)
+if defined AddCapabilities for %%a in (%AddCapabilities%) do (
+  set "_a=%%a"
+  Dism /ScratchDir:tmp /Image:mount /Add-Capability /CapabilityName:"!_a:,=" /CapabilityName:"!" || exit /b !ERRORLEVEL!
+)
+
+if defined DisableFeatures for %%a in (%DisableFeatures%) do (
+  set "_a=%%a"
+  Dism /ScratchDir:tmp /Image:mount /Disable-Feature /FeatureName:"!_a:,=" /FeatureName:"!" /Remove || exit /b !ERRORLEVEL!
+)
+if defined EnableFeatures for %%a in (%EnableFeatures%) do (
+  set "_a=%%a"
+  Dism /ScratchDir:tmp /Image:mount /Enable-Feature /FeatureName:"!_a:,=" /FeatureName:"!" /All || exit /b !ERRORLEVEL!
+)
+exit /b
 
 :tryInstallDrv
 for /r "%~1\" %%x in (*.inf) do (
@@ -267,14 +291,14 @@ if not "%~2"=="" reg add HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\SideByS
 exit /b
 
 :latentESU
-if exist mount\Windows\WinSxS\Manifests\amd64_microsoft-windows-s..edsecurityupdatesai_*.manifest exit /b
+if exist mount\Windows\WinSxS\Manifests\*_microsoft-windows-s*edsecurityupdatesai_*.manifest exit /b
 
-gsudo -s copy tmp\amd64_microsoft-windows-s..edsecurityupdatesai_*.manifest mount\Windows\WinSxS\Manifests\
+gsudo -s copy "tmp\%arch:x64=amd64%_microsoft-windows-s*edsecurityupdatesai_*.manifest" mount\Windows\WinSxS\Manifests\
 
 reg load HKLM\zCOMPONENTS mount\Windows\System32\config\COMPONENTS
 reg load HKLM\zSOFTWARE mount\Windows\System32\config\SOFTWARE
 
-reg import tmp\ExtendedSecurityUpdatesAI.reg
+reg import "tmp\ExtendedSecurityUpdatesAI-%arch%.reg"
 for /f "delims=" %%x in ('reg query HKLM\zCOMPONENTS\DerivedData\VersionedIndex ^| find /i "VersionedIndex"') do reg delete "%%x" /f
 
 reg unload HKLM\zSOFTWARE
@@ -296,13 +320,17 @@ if exist mount\Windows\WinSxS\Temp\PendingDeletes\* gsudo -s del /f /q mount\Win
 if exist mount\Windows\WinSxS\Temp\TransformerRollbackData\* gsudo -s del /f /q /s mount\Windows\WinSxS\Temp\TransformerRollbackData\*
 
 if exist mount\Windows\INF\*.log del /f /q mount\Windows\INF\*.log
-for /d %%x in (mount\Windows\CbsTemp\* mount\Windows\Temp\*) do rmdir /s /q "%%x"
 del /f /q mount\Windows\CbsTemp\* mount\Windows\Temp\* 2>nul
+call :removeSubdirs mount\Windows\CbsTemp & call :removeSubdirs mount\Windows\Temp
 
 if exist mount\Windows\WinSxS\pending.xml exit /b
-for /d %%x in (mount\Windows\WinSxS\Temp\InFlight\*) do gsudo -s rmdir /s /q "%%x"
+call :removeSubdirs mount\Windows\WinSxS\Temp\InFlight "gsudo -s"
 if exist mount\Windows\WinSxS\Temp\PendingRenames\* gsudo -s del /f /q mount\Windows\WinSxS\Temp\PendingRenames\*
 
+exit /b
+
+:removeSubdirs
+for /f "delims=" %%x in ('dir /b /ad "%~1\" 2^>nul') do %~2 rmdir /s /q "%~1\%%x"
 exit /b
 
 :updateDefender
@@ -315,20 +343,22 @@ if "%_mpam%"=="" exit /b
 if exist "mount\ProgramData\Microsoft\Windows Defender\Definition Updates\Updates\*.vdm" (echo Defender seems updated & exit /b)
 
 7z x -ba "%_mpam%" -o"mount\ProgramData\Microsoft\Windows Defender" -x^^!*defender*.xml -xr^^!MpSigStub.exe
-:: for old updates
-for /d %%a in ("mount\ProgramData\Microsoft\Windows Defender\Platform\*.*.*") do (
-  for %%x in (ConfigSecurityPolicy.exe MpAsDesc.dll MpEvMsg.dll ProtectionManagement.dll MpUxAgent.dll) do (
-    if not exist "%%a\%%x" copy /b "mount\Program Files\Windows Defender\%%x" "%%a\"
-  )
-  for /d %%k in ("mount\Program Files\Windows Defender\*-*") do for %%x in (MpAsDesc.dll MpEvMsg.dll ProtectionManagement.dll MpUxAgent.dll) do (
-    if not exist "%%a\%%~nxk\%%x.mui" xcopy /ki "%%k\%%x.mui" "%%a\%%~nxk\"
-  )
 
-  if /i not "%arch%"=="x86" (
-    if not exist "%%a\x86\MpAsDesc.dll" copy /b "mount\Program Files (x86)\Windows Defender\MpAsDesc.dll" "%%a\x86\"
-    for /d %%k in ("mount\Program Files (x86)\Windows Defender\*-*") do (
-      if not exist "%%a\x86\%%~nxk\MpAsDesc.dll.mui" xcopy /ki "%%k\MpAsDesc.dll.mui" "%%a\x86\%%~nxk\"
-    )
+:: for old updates
+set "_mpam=" & for /d %%a in ("mount\ProgramData\Microsoft\Windows Defender\Platform\*.*.*") do set "_mpam=%%a"
+if "%_mpam%"=="" exit /b 1
+
+for %%x in (ConfigSecurityPolicy.exe MpAsDesc.dll MpEvMsg.dll ProtectionManagement.dll MpUxAgent.dll) do (
+  if not exist "%_mpam%\%%x" copy /b "mount\Program Files\Windows Defender\%%x" "%_mpam%\"
+)
+for /d %%k in ("mount\Program Files\Windows Defender\*-*.") do for %%x in (MpAsDesc.dll MpEvMsg.dll ProtectionManagement.dll MpUxAgent.dll) do (
+  if not exist "%_mpam%\%%~nk\%%x.mui" xcopy /ki "%%k\%%x.mui" "%_mpam%\%%~nk\"
+)
+
+if /i not "%arch%"=="x86" (
+  if not exist "%_mpam%\x86\MpAsDesc.dll" xcopy /ki "mount\Program Files (x86)\Windows Defender\MpAsDesc.dll" "%_mpam%\x86\"
+  for /d %%k in ("mount\Program Files (x86)\Windows Defender\*-*.") do (
+    if not exist "%_mpam%\x86\%%~nk\MpAsDesc.dll.mui" xcopy /ki "%%k\MpAsDesc.dll.mui" "%_mpam%\x86\%%~nk\"
   )
 )
 exit /b
@@ -342,14 +372,6 @@ reg load HKLM\TEMP "!_a!" && (reg save HKLM\TEMP "!_a!2" /c /f & reg unload HKLM
 move /y "!_a!2" "!_a!" && for %%a in ("!_a!.LOG1" "!_a!.LOG2") do if "%%~za" gtr "0" del /f /a "%%~a"
 
 shift & goto :optimizeHive
-
-:optimizeWIM
-if "%~1"=="" (
-  wimlib-imagex optimize "%wimFile%"
-) else (
-  wimlib-imagex export "%wimFile%" "%~1" temp.wim && move /y temp.wim "%wimFile%"
-)
-exit /b
 
 :updateDVD
 if not defined TargetISO exit /b 2
@@ -375,22 +397,59 @@ if not exist "%~2" exit /b 1
 
 :: compare file versions
 powershell -nop -c "exit (gi '%~1').VersionInfo.FileVersionRaw.CompareTo((gi '%~2').VersionInfo.FileVersionRaw)"
+
 if errorlevel 1 (
   echo "%~1" & copy /b /y "%~1" "%~2"
 ) else if errorlevel 0 (
-  fc /b "%~1" "%~2" >nul || xcopy /kdry "%~1" "%~2"
+  :: skip identical files
+  if "%~z1"=="%~z2" fc /b "%~1" "%~2" >nul && exit /b
+  xcopy /kdry "%~1" "%~2"
 )
 
 exit /b
 
 :updateDVDboot
+:: TODO if exist mount\Windows\servicing\Packages\WinPE-Setup-Package~*.mum xcopy /kury mount\sources dvd\sources
 call :updateDVD mount\sources || exit /b !ERRORLEVEL!
 
-:: TODO update efi\boot
+:: update boot files
+if /i not "%arch%"=="arm64" (
+  xcopy /kdry mount\Windows\Boot\PCAT\bootmgr dvd\
+  xcopy /kidry mount\Windows\Boot\PCAT\memtest.exe dvd\boot\
+  xcopy /kidry mount\Windows\Boot\EFI\memtest.efi dvd\efi\microsoft\boot\
+)
+
+set "_pa=%arch:x86=ia32%" & set "_pa=!_pa:arm64=aa64!"
+:: new boot?
+if exist mount\Windows\Boot\EFI_EX\*_EX.efi (
+  xcopy /kidry mount\Windows\Boot\DVD_EX\EFI\en-US\efisys_EX.bin dvd\efi\microsoft\boot\efisys.bin
+  xcopy /kdry mount\Windows\Boot\DVD_EX\EFI\en-US\efisys_noprompt_EX.bin dvd\efi\microsoft\boot\efisys_noprompt.bin
+
+  xcopy /kidry mount\Windows\Boot\EFI_EX\bootmgfw_EX.efi "dvd\efi\boot\boot%_pa%.efi"
+  xcopy /kdry mount\Windows\Boot\EFI_EX\bootmgr_EX.efi dvd\bootmgr.efi
+
+  for %%a in (mount\Windows\Boot\FONTS_EX\*) do (set "_a=%%~nxa" & xcopy /kidry "%%a" "dvd\efi\microsoft\boot\fonts\!_a:_EX.=.!")
+) else (
+  xcopy /kidry mount\Windows\Boot\DVD\EFI\en-US\efisys.bin dvd\efi\microsoft\boot\
+  xcopy /kdry mount\Windows\Boot\DVD\EFI\en-US\efisys_noprompt.bin dvd\efi\microsoft\boot\
+
+  xcopy /kudry mount\Windows\Boot\EFI\bootmgfw.efi dvd\efi\boot\
+  xcopy /kidry mount\Windows\Boot\EFI\bootmgfw.efi "dvd\efi\boot\boot%_pa%.efi"
+  xcopy /kdry mount\Windows\Boot\EFI\bootmgr.efi dvd\
+)
+if exist mount\setup.exe copy /b /y mount\setup.exe dvd\
+
 exit /b
 
 :createISO
 if not defined TargetISO exit /b 2
+if not exist dvd\sources\ exit /b 1
+
+:: TODO adding setup DU
+:: 7z x -ba -aoa "uup\*-%arch%-SetupDU*.cab" -otmp\du -x^^!setup.exe
+:::: xcopy /kudry tmp\du dvd\sources\
+:: call :updateDVD tmp\du
+
 echo Make target ISO "%TargetISO%"
 
 exit /b
