@@ -162,8 +162,7 @@ if /i "!edition!"=="WindowsPE" (
 
 pushd tmp
 :: ServicingStack first
-set "_pkgPath[0]="
-for /d %%k in ("KB*-%arch%-SSU") do call :checkInstall "%%k" "_pkgPath[0]"
+for /d %%k in ("KB*-%arch%-SSU") do (set "_pkgPath[0]=" & call :checkInstall "%%k" "_pkgPath[0]")
 
 set "_pkgPath[1]="
 if /i "!edition!"=="WindowsPE" (
@@ -180,10 +179,12 @@ for /d %%k in ("KB*-%arch%-Enablement" "KB*-%arch%-NetFX") do call :checkInstall
 for /f "delims=" %%k in ('dir /b /ad /on "KB*-%arch%-NDP*" "KB*-%arch%"') do call :checkInstall "%%k" "_pkgPath[2]"
 
 :: cumulative update
-set "_pkgPath[3]="
-for /d %%k in ("KB*-%arch%-LCU") do call :checkInstall "%%k" "_pkgPath[3]"
+set _n=2
+for /d %%k in ("KB*-%arch%-LCU") do (
+  set /a _n+=1 & set "_pkgPath[!_n!]=" & call :checkInstall "%%k" "_pkgPath[!_n!]"
+)
 
-for /l %%n in (0,1,3) do if not "!_pkgPath[%%n]!"=="" (
+for /l %%n in (0,1,%_n%) do if not "!_pkgPath[%%n]!"=="" (
   echo Offline installing "!_pkgPath[%%n]!"
   Dism /ScratchDir:. /Image:..\mount /Add-Package !_pkgPath[%%n]! || goto :Discard
 )
@@ -235,27 +236,21 @@ for /r "%~1\" %%x in (*.inf) do (
 exit /b
 
 :checkInstall
-set "_pp=%~1\update.mum"
-if not exist "%_pp%" exit /b
-
+if not exist "%~1\update.mum" exit /b
 set "_dir=%~nx1"
-set "_var=%~2"
 
 :: WinPE supported?
 if /i "!edition!"=="WindowsPE" if /i not "%_dir:~-4%"=="-SSU" if /i not "%_dir:~-7%"=="-SafeOS" if /i not "%_dir:~-4%"=="-LCU" (
   rem if /i "%_dir:~-6%"=="-NetFX" exit /b
-  findstr /im "WinPE" "%_pp%" || (echo "%_dir%" not support WinPE & exit /b)
-  rem findstr /im "WinPE-NetFx-Package" "%_pp%" && exit /b 1
+  findstr /im "WinPE" "%~1\update.mum" || (echo "%_dir%" not support WinPE & exit /b)
+  rem findstr /im "WinPE-NetFx-Package" "%~1\update.mum" && exit /b 1
 )
 :: skip installed packages
 if /i "%_dir:~0,2%"=="KB" for /f "delims=-" %%x in ("%_dir%") do (
   findstr /im "\<%%x\>" "..\mount\Windows\servicing\Packages\Package_for_*.mum" && exit /b 1
 )
 
-if /i not "%_dir:~-4%"=="-SSU" if /i not "%_dir:~-7%"=="-SafeOS" if /i not "%_dir:~-4%"=="-LCU" (
-  set "%_var%=!%_var%! /PackagePath:"%_pp%"" & exit /b
-)
-set "%_var%=/PackagePath:"%_pp%""
+set "%~2=!%~2! /PackagePath:"%~1\update.mum""
 exit /b
 
 :sbsConfig
@@ -343,8 +338,8 @@ set "_a=%~1" & if "!_a!"=="" exit /b
 if "%~nx1"=="!_a!" set "_a=mount\Windows\System32\config\!_a!"
 
 dir /a /q "!_a!*"
-reg load HKLM\TEMP "!_a!" && (reg save HKLM\TEMP temp.hiv /c /f & reg unload HKLM\TEMP)
-move /y temp.hiv "!_a!" && del /f /a "!_a!.LOG?"
+reg load HKLM\TEMP "!_a!" && (reg save HKLM\TEMP "!_a!2" /c /f & reg unload HKLM\TEMP)
+move /y "!_a!2" "!_a!" && for %%a in ("!_a!.LOG1" "!_a!.LOG2") do if "%%~za" gtr "0" del /f /a "%%~a"
 
 shift & goto :optimizeHive
 
