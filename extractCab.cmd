@@ -74,9 +74,7 @@ goto :eof
 
 ::--------------
 :renameCabId
-set "_id=%~1"
-
-rmdir /s /q "tmp\%_id%" 2>nul
-ren "tmp\%cabId%" "%_id%" && set "cabId=%_id%"
+rmdir /s /q "tmp\%~1" 2>nul
+ren "tmp\%cabId%" %1 && set "cabId=%~1"
 
 exit /b

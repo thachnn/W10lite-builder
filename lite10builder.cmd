@@ -54,8 +54,9 @@ if /i "%SourceFile:~-4%"==".wim" (
   if exist dvd\efi\boot\*x64.efi (set arch=x64) else if exist dvd\efi\boot\*64.efi (set arch=arm64) else (set arch=x86)
   call :prepareUUP
 
+  :: adding setup DU
   set "_duCab=" & for %%i in ("uup\*-!arch!-SetupDU*.cab") do set "_duCab=%%i"
-  call :updateDVD "!_duCab!"
+  if not "!_duCab!"=="" call :updateDVD "!_duCab!"
 
   for %%f in (dvd\sources\install.wim dvd\sources\boot.wim) do call :processWIM "%%f"
   call :createISO
@@ -78,7 +79,7 @@ exit /b
 :: process WinRE first
 if /i not "%~1"=="Winre.wim" (
   if defined OSWimIndex (set "_oIndex=%OSWimIndex%") else (set _oIndex=1)
-  wimlib-imagex extract "%~1" "!_oIndex!" Windows/System32/Recovery/Winre.wim 2>nul && call :processWIM Winre.wim
+  wimlib-imagex extract %1 "!_oIndex!" Windows/System32/Recovery/Winre.wim 2>nul && call :processWIM Winre.wim
 )
 
 set "wimFile=%~1"
@@ -126,7 +127,7 @@ exit /b
 if "%~1"=="" (
   wimlib-imagex optimize "%wimFile%"
 ) else (
-  wimlib-imagex export "%wimFile%" "%~1" temp.wim && move /y temp.wim "%wimFile%"
+  wimlib-imagex export "%wimFile%" %1 temp.wim && move /y temp.wim "%wimFile%"
 )
 exit /b
 
@@ -138,7 +139,7 @@ if exist mount\* rmdir /s /q mount
 if not exist mount\ mkdir mount
 
 ::mkdir mount\Windows\WinSxS\Manifests
-::wimlib-imagex extract "%wimFile%" %_index% Windows/servicing/Packages/Package_for_*.mum Windows/System32/config Windows/System32/Recovery Windows/System32/SMI/Store/Machine Windows/System32/UpdateAgent.* Windows/System32/Facilitator.* sources --dest-dir=mount --preserve-dir-structure --nullglob --no-acls
+::wimlib-imagex extract "%wimFile%" %_index% Windows/servicing/Packages/Package_for_*.mum Windows/System32/config Windows/System32/Recovery Windows/System32/SMI/Store/Machine Windows/System32/UpdateAgent.* Windows/System32/Facilitator.* sources setup.exe Windows/Boot --dest-dir=mount --preserve-dir-structure --nullglob --no-acls
 Dism /Mount-Image /ImageFile:"%wimFile%" /Index:%_index% /MountDir:mount /Optimize || exit /b 2
 
 :: pre-update
@@ -185,8 +186,7 @@ for /l %%n in (0,1,%_n%) do if not "!_pkgPath[%%n]!"=="" (
 popd
 
 if /i "!edition!"=="WindowsPE" (
-  call :meltdownSpectre
-  call :sbsConfig 3 "" 1
+  call :meltdownSpectre & call :sbsConfig 3 "" 1
 ) else (
   :: allow rebase
   call :sbsConfig 3 0
@@ -200,6 +200,7 @@ if /i not "!edition!"=="WindowsPE" call :updateDefender
 
 :: update ISO files
 for %%k in (UpdateAgent.dll Facilitator.dll ServicingCommon.dll) do call :updateDVD "%%k" mount\Windows\System32
+:: if exist mount\Windows\servicing\Packages\WinPE-Setup-Package~*.mum
 if exist mount\sources\setup.exe call :updateDVDboot
 
 if /i not "%wimFile%"=="Winre.wim" if exist mount\Windows\System32\Recovery\Winre.wim if exist Winre.wim (
@@ -208,7 +209,7 @@ if /i not "%wimFile%"=="Winre.wim" if exist mount\Windows\System32\Recovery\Winr
 
 :: install drivers
 if /i "!edition!"=="WindowsPE" (set "_dTypes=ALL WinPE") else (set "_dTypes=ALL OS")
-for %%a in (%_dTypes%) do call :tryInstallDrv "drvs\%%a" || goto :Discard
+for %%k in (%_dTypes%) do call :tryInstallDrv "drvs\%%k" || goto :Discard
 
 :: optimize hive files
 call :optimizeHive SOFTWARE SYSTEM COMPONENTS DRIVERS mount\Windows\System32\SMI\Store\Machine\SCHEMA.DAT
@@ -223,7 +224,7 @@ exit /b 1
 
 :switchEdition
 if not defined TargetEdition exit /b
-Dism /ScratchDir:tmp /Image:mount /Get-TargetEditions | find /i "%TargetEdition:*,=%" || exit /b
+Dism /ScratchDir:tmp /Image:mount /Get-TargetEditions | find /i "%TargetEdition:*,=%" || exit /b 0
 
 if "%TargetEdition:,=%"=="%TargetEdition%" (
   Dism /ScratchDir:tmp /Image:mount /Set-Edition:"%TargetEdition%" || exit /b !ERRORLEVEL!
@@ -254,7 +255,7 @@ exit /b
 
 :tryInstallDrv
 for /r "%~1\" %%x in (*.inf) do (
-  Dism /ScratchDir:tmp /Image:mount /Add-Driver /Driver:"%~1" /Recurse || exit /b !ERRORLEVEL!
+  Dism /ScratchDir:tmp /Image:mount /Add-Driver /Driver:%1 /Recurse || exit /b !ERRORLEVEL!
   exit /b
 )
 exit /b
@@ -281,13 +282,13 @@ exit /b
 reg load HKLM\zSOFTWARE mount\Windows\System32\config\SOFTWARE
 
 :: reg query HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration
-for %%x in (SupersededActions DisableResetbase DisableComponentBackups) do (call :sbsConfigImpl %%x "%%~1" & shift)
+for %%x in (SupersededActions DisableResetbase DisableComponentBackups) do (call :sbsConfigImpl %%x %%1 & shift)
 
 reg unload HKLM\zSOFTWARE
 exit /b
 
 :sbsConfigImpl
-if not "%~2"=="" reg add HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration /v "%~1" /t REG_DWORD /d "%~2" /f
+if not "%~2"=="" reg add HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration /v %1 /t REG_DWORD /d %2 /f
 exit /b
 
 :latentESU
@@ -345,20 +346,20 @@ if exist "mount\ProgramData\Microsoft\Windows Defender\Definition Updates\Update
 7z x -ba "%_mpam%" -o"mount\ProgramData\Microsoft\Windows Defender" -x^^!*defender*.xml -xr^^!MpSigStub.exe
 
 :: for old updates
-set "_mpam=" & for /d %%a in ("mount\ProgramData\Microsoft\Windows Defender\Platform\*.*.*") do set "_mpam=%%a"
+set "_mpam=" & for /d %%x in ("mount\ProgramData\Microsoft\Windows Defender\Platform\*.*.*") do set "_mpam=%%x"
 if "%_mpam%"=="" exit /b 1
 
 for %%x in (ConfigSecurityPolicy.exe MpAsDesc.dll MpEvMsg.dll ProtectionManagement.dll MpUxAgent.dll) do (
   if not exist "%_mpam%\%%x" copy /b "mount\Program Files\Windows Defender\%%x" "%_mpam%\"
 )
-for /d %%k in ("mount\Program Files\Windows Defender\*-*.") do for %%x in (MpAsDesc.dll MpEvMsg.dll ProtectionManagement.dll MpUxAgent.dll) do (
-  if not exist "%_mpam%\%%~nk\%%x.mui" xcopy /ki "%%k\%%x.mui" "%_mpam%\%%~nk\"
+for /d %%a in ("mount\Program Files\Windows Defender\*-*.") do for %%x in (MpAsDesc.dll MpEvMsg.dll ProtectionManagement.dll MpUxAgent.dll) do (
+  if not exist "%_mpam%\%%~na\%%x.mui" xcopy /ki "%%a\%%x.mui" "%_mpam%\%%~na\"
 )
 
 if /i not "%arch%"=="x86" (
   if not exist "%_mpam%\x86\MpAsDesc.dll" xcopy /ki "mount\Program Files (x86)\Windows Defender\MpAsDesc.dll" "%_mpam%\x86\"
-  for /d %%k in ("mount\Program Files (x86)\Windows Defender\*-*.") do (
-    if not exist "%_mpam%\x86\%%~nk\MpAsDesc.dll.mui" xcopy /ki "%%k\MpAsDesc.dll.mui" "%_mpam%\x86\%%~nk\"
+  for /d %%a in ("mount\Program Files (x86)\Windows Defender\*-*.") do (
+    if not exist "%_mpam%\x86\%%~na\MpAsDesc.dll.mui" xcopy /ki "%%a\MpAsDesc.dll.mui" "%_mpam%\x86\%%~na\"
   )
 )
 exit /b
@@ -377,39 +378,52 @@ shift & goto :optimizeHive
 if not defined TargetISO exit /b 2
 if not exist dvd\sources\ exit /b 1
 
-echo Update DVD files: "%~1" "%~2"
+echo Update DVD files: %1 %2
 if not "%~2"=="" (
   :: from a sources file
   if exist "%~2\%~1" call :copyIfNewer "%~2\%~1" "dvd\sources\%~1"
 ) else if /i "%~x1"==".cab" (
   :: update DVD from Setup DU
   set "_a=" & for /f "delims=" %%a in ('dir /b /a dvd\sources\*.') do set "_a=!_a! "%%a""
-  7z x -ba -aoa "%~1" -odvd\sources *.* !_a!
+  7z x -ba -aoa %1 -odvd\sources -x^^!setup.exe *.* !_a!
 ) else if exist "%~1\" (
-  :: or from a sources dir
-  for /r "%~1" %%a in (*) do (set "_a=%%a" & call :copyIfNewer "!_a!" "dvd\sources\!_a:%~f1\=!")
+  :: sync with a sources dir
+  for /r %1 %%a in (*) do (set "_a=%%a" & call :copyIfNewer "!_a!" "dvd\sources\!_a:%~f1\=!" 1)
+)
+
+exit /b 0
+
+:copyIfNewer
+if not exist %2 exit /b 1
+
+:: skip identical files
+comp /m %1 %2 >nul && exit /b
+
+:: compare file versions
+:: powershell -nop -c "exit (gi '%~1').VersionInfo.FileVersionRaw.CompareTo((gi '%~2').VersionInfo.FileVersionRaw)"
+set "_ver1=-1" & call :getFileRevision %1 _ver1
+set "_ver2=-1" & call :getFileRevision %2 _ver2
+
+if %_ver1% equ %_ver2% (
+  xcopy /kdry %1 %2
+) else if %_ver1% gtr %_ver2% (
+  echo %1 & copy /b /y %1 %2
+) else if "%~3"=="1" (
+  :: sync mode
+  echo Sync %2 & copy /b /y %2 %1
 )
 
 exit /b
 
-:copyIfNewer
-if not exist "%~2" exit /b 1
-
-:: compare file versions
-powershell -nop -c "exit (gi '%~1').VersionInfo.FileVersionRaw.CompareTo((gi '%~2').VersionInfo.FileVersionRaw)"
-
-if errorlevel 1 (
-  echo "%~1" & copy /b /y "%~1" "%~2"
-) else if errorlevel 0 (
-  :: skip identical files
-  if "%~z1"=="%~z2" fc /b "%~1" "%~2" >nul && exit /b
-  xcopy /kdry "%~1" "%~2"
+:getFileRevision
+set "_fp=%~f1"
+for /f "tokens=4 delims=. " %%x in ('wmic datafile where "name='!_fp:\=\\!'" get Version ^| find "."') do (
+  if not "%%x"=="" set /a "%~2=%%x"
 )
-
 exit /b
 
 :updateDVDboot
-:: TODO if exist mount\Windows\servicing\Packages\WinPE-Setup-Package~*.mum xcopy /kury mount\sources dvd\sources
+:: xcopy /kudry mount\sources dvd\sources
 call :updateDVD mount\sources || exit /b !ERRORLEVEL!
 
 :: update boot files
@@ -428,7 +442,10 @@ if exist mount\Windows\Boot\EFI_EX\*_EX.efi (
   xcopy /kidry mount\Windows\Boot\EFI_EX\bootmgfw_EX.efi "dvd\efi\boot\boot%_pa%.efi"
   xcopy /kdry mount\Windows\Boot\EFI_EX\bootmgr_EX.efi dvd\bootmgr.efi
 
-  for %%a in (mount\Windows\Boot\FONTS_EX\*) do (set "_a=%%~nxa" & xcopy /kidry "%%a" "dvd\efi\microsoft\boot\fonts\!_a:_EX.=.!")
+  for %%a in (mount\Windows\Boot\FONTS_EX\*) do (
+    set "_a=%%~nxa" & set "_a=!_a:_EX.=.!"
+    xcopy /kidry "%%a" "dvd\efi\microsoft\boot\fonts\!_a!" & xcopy /kidry "%%a" "dvd\boot\fonts\!_a!"
+  )
 ) else (
   xcopy /kidry mount\Windows\Boot\DVD\EFI\en-US\efisys.bin dvd\efi\microsoft\boot\
   xcopy /kdry mount\Windows\Boot\DVD\EFI\en-US\efisys_noprompt.bin dvd\efi\microsoft\boot\
@@ -437,7 +454,7 @@ if exist mount\Windows\Boot\EFI_EX\*_EX.efi (
   xcopy /kidry mount\Windows\Boot\EFI\bootmgfw.efi "dvd\efi\boot\boot%_pa%.efi"
   xcopy /kdry mount\Windows\Boot\EFI\bootmgr.efi dvd\
 )
-if exist mount\setup.exe copy /b /y mount\setup.exe dvd\
+if exist mount\setup.exe xcopy /kdry mount\setup.exe dvd\
 
 exit /b
 
@@ -445,11 +462,25 @@ exit /b
 if not defined TargetISO exit /b 2
 if not exist dvd\sources\ exit /b 1
 
-:: TODO adding setup DU
-:: 7z x -ba -aoa "uup\*-%arch%-SetupDU*.cab" -otmp\du -x^^!setup.exe
-:::: xcopy /kudry tmp\du dvd\sources\
-:: call :updateDVD tmp\du
+rem 7z x -ba -aoa "uup\*-%arch%-SetupDU*.cab" -otmp\du -x^^!setup.exe
+:: xcopy /kudry tmp\du dvd\sources\
+:: call :updateDVD tmp\du\*.*
+:: copy /y tmp\du\*.ini dvd\sources\ 2>nul
+:: copy /b /y tmp\du\*-*\*.mui dvd\sources\*-*\
+:: xcopy /ekiry tmp\du\ReplacementManifests dvd\sources\ReplacementManifests\
+rem rmdir /s /q tmp\du
 
 echo Make target ISO "%TargetISO%"
 
+set "_b=#pEF,e,b"dvd\efi\microsoft\boot\efisys.bin""
+if /i "%arch%"=="arm64" (set "_b=1%_b%") else (set "_b=2#p0,e,b"dvd\boot\etfsboot.com"%_b%")
+
+set "_a=%TargetISO:*\=%" & set "_a=!_a:.iso=!"
+call :toUpperCase _a
+
+oscdimg -m -o -u2 -udfver102 -bootdata:%_b% -l"%_a: =_%" dvd "%TargetISO%"
+exit /b
+
+:toUpperCase
+for %%x in (A B C D E F G H I J K L M N O P Q R S T U V W X Y Z) do set "%~1=!%~1:%%x=%%x!"
 exit /b

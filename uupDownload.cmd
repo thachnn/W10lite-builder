@@ -45,11 +45,15 @@ aria2c %crc% --file-allocation=trunc -c -R -o "tmp\%outFile%" "%url%"
 
 :Downloaded
 echo Try to extract cab from "%outFile%"
+
 :: is SFX file?
 if /i "%outFile:~-4%"==".exe" (
-  move "tmp\%outFile%" uup\
+  move /y "tmp\%outFile%" uup\
 ) else (
   :: is MSU file?
-  7z x -ba "tmp\%outFile%" -ouup -x^^!WSU* *.cab | findstr /b /c:"No files" && (move "tmp\%outFile%" uup\) || (del /f "tmp\%outFile%")
+  7z x -ba "tmp\%outFile%" -ouup -x^^!WSU* *.cab | findstr /b /c:"No files" && (move /y "tmp\%outFile%" uup\ & exit /b)
+
+  del /f "tmp\%outFile%"
+  if not exist "uup\%outFile%" (if exist "uup\%outFile:64=%" ren "uup\%outFile:64=%" "%outFile%")
 )
 exit /b
