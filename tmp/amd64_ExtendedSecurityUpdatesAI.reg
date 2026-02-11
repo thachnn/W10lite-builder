@@ -1,7 +1,6 @@
 REGEDIT4
 
 [HKEY_LOCAL_MACHINE\zCOMPONENTS\DerivedData\Components\amd64_microsoft-windows-s..edsecurityupdatesai_31bf3856ad364e35_25.10.0.0_none_eeb9d8760f514b22]
-"c!microsoft-w..-foundation_31bf3856ad364e35_10.0.19041.1_9657bd44112a29ec"=hex:
 ; ASCII hex: Microsoft-Windows-Security-SPP-Component-ExtendedSecurityUpdatesAI, Culture=neutral, Version=25.10.0.0, PublicKeyToken=31bf3856ad364e35, ProcessorArchitecture=amd64, versionScope=NonSxS
 "identity"=hex:4d,69,63,72,6f,73,6f,66,74,2d,57,69,6e,64,6f,77,73,2d,53,65,63,\
   75,72,69,74,79,2d,53,50,50,2d,43,6f,6d,70,6f,6e,65,6e,74,2d,45,78,74,65,6e,\

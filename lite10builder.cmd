@@ -138,8 +138,7 @@ echo Update "!edition!.!_build!" image "%wimFile%:%_index%"
 if exist mount\* rmdir /s /q mount
 if not exist mount\ mkdir mount
 
-::mkdir mount\Windows\WinSxS\Manifests
-::wimlib-imagex extract "%wimFile%" %_index% Windows/servicing/Packages/Package_for_*.mum Windows/System32/config Windows/System32/Recovery Windows/System32/SMI/Store/Machine Windows/System32/UpdateAgent.* Windows/System32/Facilitator.* sources setup.exe Windows/Boot --dest-dir=mount --preserve-dir-structure --nullglob --no-acls
+::wimlib-imagex extract "%wimFile%" %_index% Windows/servicing/Packages/Package_for_*.mum Windows/WinSxS/Manifests/*_microsoft-windows-foundation_* Windows/System32/config Windows/System32/Recovery Windows/System32/SMI/Store/Machine Windows/System32/UpdateAgent.* Windows/System32/Facilitator.* sources setup.exe Windows/Boot --dest-dir=mount --preserve-dir-structure --nullglob --no-acls
 Dism /Mount-Image /ImageFile:"%wimFile%" /Index:%_index% /MountDir:mount /Optimize || exit /b 2
 
 :: pre-update
@@ -212,7 +211,7 @@ if /i "!edition!"=="WindowsPE" (set "_dTypes=ALL WinPE") else (set "_dTypes=ALL 
 for %%k in (%_dTypes%) do call :tryInstallDrv "drvs\%%k" || goto :Discard
 
 :: optimize hive files
-call :optimizeHive SOFTWARE SYSTEM COMPONENTS DRIVERS mount\Windows\System32\SMI\Store\Machine\SCHEMA.DAT
+call :optimizeHive SOFTWARE SYSTEM COMPONENTS DRIVERS mount\Windows\System32\SMI\Store\Machine\SCHEMA.DAT mount\Users\Default\NTUSER.DAT
 pushd mount & del /f /q /a /s *.regtrans-ms *.TM.blf & popd
 
 Dism /Unmount-Image /MountDir:mount /Commit
@@ -292,14 +291,20 @@ if not "%~2"=="" reg add HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\SideByS
 exit /b
 
 :latentESU
-if exist mount\Windows\WinSxS\Manifests\*_microsoft-windows-s*edsecurityupdatesai_*.manifest exit /b
+set "xBT=%arch:x64=amd64%"
+if exist "mount\Windows\WinSxS\Manifests\%xBT%_microsoft-windows-s*edsecurityupdatesai_*.manifest" exit /b
 
-gsudo -s copy "tmp\%arch:x64=amd64%_microsoft-windows-s*edsecurityupdatesai_*.manifest" mount\Windows\WinSxS\Manifests\
+gsudo -s copy "tmp\%xBT%_microsoft-windows-s*edsecurityupdatesai_*.manifest" mount\Windows\WinSxS\Manifests\
 
 reg load HKLM\zCOMPONENTS mount\Windows\System32\config\COMPONENTS
 reg load HKLM\zSOFTWARE mount\Windows\System32\config\SOFTWARE
 
-reg import "tmp\ExtendedSecurityUpdatesAI-%arch%.reg"
+reg import "tmp\%xBT%_ExtendedSecurityUpdatesAI.reg"
+
+for /f "tokens=4,6 delims=_" %%a in ('dir /b /a "mount\Windows\WinSxS\Manifests\%xBT%_microsoft-windows-foundation_*.manifest"') do ^
+for /f "delims=[]" %%x in ('findstr /i "DerivedData" "tmp\%xBT%_ExtendedSecurityUpdatesAI.reg"') do (
+  reg add "%%x" /v "c^!microsoft-w..-foundation_31bf3856ad364e35_%%a_%%~nb" /t REG_BINARY /d "" /f
+)
 for /f "delims=" %%x in ('reg query HKLM\zCOMPONENTS\DerivedData\VersionedIndex ^| find /i "VersionedIndex"') do reg delete "%%x" /f
 
 reg unload HKLM\zSOFTWARE
@@ -366,11 +371,18 @@ exit /b
 
 :optimizeHive
 set "_a=%~1" & if "!_a!"=="" exit /b
-if "%~nx1"=="!_a!" set "_a=mount\Windows\System32\config\!_a!"
+if "%~nx1"=="%_a%" set "_a=mount\Windows\System32\config\%_a%"
 
-dir /a /q "!_a!*"
-reg load HKLM\TEMP "!_a!" && (reg save HKLM\TEMP "!_a!2" /c /f & reg unload HKLM\TEMP)
-move /y "!_a!2" "!_a!" && for %%a in ("!_a!.LOG1" "!_a!.LOG2") do if "%%~za" gtr "0" del /f /a "%%~a"
+set "_b=%~n1" & dir /a /q "%_a%*"
+reg load "HKLM\z%_b%" "%_a%" && (
+  :: apply tweaks
+  if exist "tmp\tweaks-%_b%.reg" gsudo -s reg import "tmp\tweaks-%_b%.reg"
+  if exist "tmp\tweaks-%_b%-%arch%.reg" reg import "tmp\tweaks-%_b%-%arch%.reg"
+
+  :: export to hive file
+  reg save "HKLM\z%_b%" "%_a%2" /c /f & reg unload "HKLM\z%_b%"
+  move /y "%_a%2" "%_a%" && for %%a in ("%_a%.LOG1" "%_a%.LOG2") do if "%%~za" gtr "0" del /f /a "%%~a"
+)
 
 shift & goto :optimizeHive
 

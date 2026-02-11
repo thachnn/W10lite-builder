@@ -1,0 +1,25 @@
+REGEDIT4
+
+[HKEY_LOCAL_MACHINE\zCOMPONENTS\DerivedData\Components\arm64_microsoft-windows-s..edsecurityupdatesai_31bf3856ad364e35_25.10.0.0_none_eeb9e0b00f513fbe]
+; ASCII hex: Microsoft-Windows-Security-SPP-Component-ExtendedSecurityUpdatesAI, Culture=neutral, Version=25.10.0.0, PublicKeyToken=31bf3856ad364e35, ProcessorArchitecture=arm64, versionScope=NonSxS
+"identity"=hex:4d,69,63,72,6f,73,6f,66,74,2d,57,69,6e,64,6f,77,73,2d,53,65,63,\
+  75,72,69,74,79,2d,53,50,50,2d,43,6f,6d,70,6f,6e,65,6e,74,2d,45,78,74,65,6e,\
+  64,65,64,53,65,63,75,72,69,74,79,55,70,64,61,74,65,73,41,49,2c,20,43,75,6c,\
+  74,75,72,65,3d,6e,65,75,74,72,61,6c,2c,20,56,65,72,73,69,6f,6e,3d,32,35,2e,\
+  31,30,2e,30,2e,30,2c,20,50,75,62,6c,69,63,4b,65,79,54,6f,6b,65,6e,3d,33,31,\
+  62,66,33,38,35,36,61,64,33,36,34,65,33,35,2c,20,50,72,6f,63,65,73,73,6f,72,\
+  41,72,63,68,69,74,65,63,74,75,72,65,3d,61,72,6d,36,34,2c,20,76,65,72,73,69,\
+  6f,6e,53,63,6f,70,65,3d,4e,6f,6e,53,78,53
+; SHA256 of the manifest file
+"S256H"=hex:9d,0f,2b,d2,06,1a,21,54,11,cd,54,68,39,a6,af,e1,f6,aa,41,ac,eb,64,\
+  08,75,bc,f5,9c,8f,b6,71,f8,25
+"CF"=dword:00000040
+
+;
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Winners\arm64_microsoft-windows-s..edsecurityupdatesai_31bf3856ad364e35_none_0e1ac5e1d0e42392]
+@="25.10"
+
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Winners\arm64_microsoft-windows-s..edsecurityupdatesai_31bf3856ad364e35_none_0e1ac5e1d0e42392\25.10]
+@="25.10.0.0"
+"25.10.0.0"=hex:01
+
