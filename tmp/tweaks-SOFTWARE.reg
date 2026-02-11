@@ -1,0 +1,49 @@
+REGEDIT4
+
+; disable Reserved Storage (~7GB for updates, system caches,...)
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\ReserveManager]
+"ShippedWithReserves"=dword:00000000
+
+; disable automatic updates
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU]
+"NoAutoUpdate"=dword:00000001
+"AUOptions"=dword:00000002
+
+; grant the SYSTEM user write access to Microsoft-Windows-LiveId Event Log channels
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\WINEVT\Channels\Microsoft-Windows-LiveId/Analytic]
+"ChannelAccess"="O:BAG:SYD:(A;;0x5;;;SY)(A;;0x1;;;BA)(A;;0x1;;;LA)"
+
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\WINEVT\Channels\Microsoft-Windows-LiveId/Operational]
+; O:BAG:SYD:(A;;0x1;;;SY)(A;;0x1;;;BA)(A;;0x1;;;LA)
+"ChannelAccess"="O:BAG:SYD:(A;;0x5;;;SY)(A;;0x1;;;BA)(A;;0x1;;;LA)"
+
+; stop Event ID 360: Windows Hello for Business provisioning will not be launched
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\PassportForWork]
+"Enabled"=dword:00000000
+
+;[HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\Windows\EnhancedStorageDevices]
+;"TCGSecurityActivationDisabled"=dword:00000001
+
+;[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore]
+;"DisableSR"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Dfrg\TaskSettings]
+"fTaskEnabled"=dword:00000000
+
+; remove Xbox scheduled tasks
+[-HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\XblGameSave\XblGameSaveTask]
+
+;[-HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks\{26EFEB2F-72EF-4A2B-BB8A-E130AECA9F59}]
+
+; Microsoft Edge tweaks
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\Edge]
+"HideFirstRunExperience"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\Edge\Recommended]
+"BackgroundModeEnabled"=dword:00000000
+"StartupBoostEnabled"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\EdgeUpdate]
+"CreateDesktopShortcutDefault"=dword:00000000
+"UpdateDefault"=dword:00000002
+

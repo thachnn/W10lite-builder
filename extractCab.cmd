@@ -22,13 +22,16 @@ set "cabId=%cabId:*-KB=KB%"
 echo Expand cab "%cabFile%" to "%cabId%"
 
 :ExpandCab
-7z x -ba -aos "uup\%cabFile%" -o"tmp\%cabId%" -x^^!WSU*.cab
-if exist "tmp\%cabId%\%cabFile%" move /y "tmp\%cabId%\*.cab" uup\ && rd /s /q "tmp\%cabId%" && goto :ExpandCab
+mkdir "tmp\%cabId%" 2>nul & expand "uup\%cabFile%" -f:* "tmp\%cabId%" >nul
+if exist "tmp\%cabId%\%cabFile%" (
+  del /f "tmp\%cabId%\WSU*.cab" 2>nul
+  move /y "tmp\%cabId%\*.cab" uup\ && rmdir /s /q "tmp\%cabId%" && goto :ExpandCab
+)
 
 :: extract nested cab
 if exist "tmp\%cabId%\*.cab" (
   if exist "tmp\%cabId%\*cablist.ini" del /f "tmp\%cabId%\*cablist.ini"
-  for %%i in ("tmp\%cabId%\*.cab") do 7z x -ba "%%i" -o"tmp\%cabId%" && del /f "%%i"
+  for %%i in ("tmp\%cabId%\*.cab") do expand "%%i" -f:* "tmp\%cabId%" >nul && del /f "%%i"
 )
 
 :: detect arch from cab name

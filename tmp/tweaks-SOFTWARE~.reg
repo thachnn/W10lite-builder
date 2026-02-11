@@ -1,0 +1,6 @@
+REGEDIT4
+
+; display UAC shield icon next to the "Manage" option in "This PC" context menu
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Classes\CLSID\{20D04FE0-3AEA-1069-A2D8-08002B30309D}\shell\Manage]
+"HasLUAShield"=""
+

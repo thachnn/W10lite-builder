@@ -139,7 +139,7 @@ if exist mount\* rmdir /s /q mount
 if not exist mount\ mkdir mount
 
 ::wimlib-imagex extract "%wimFile%" %_index% Windows/servicing/Packages/Package_for_*.mum Windows/WinSxS/Manifests/*_microsoft-windows-foundation_* Windows/System32/config Windows/System32/Recovery Windows/System32/SMI/Store/Machine Windows/System32/UpdateAgent.* Windows/System32/Facilitator.* sources setup.exe Windows/Boot --dest-dir=mount --preserve-dir-structure --nullglob --no-acls
-Dism /Mount-Image /ImageFile:"%wimFile%" /Index:%_index% /MountDir:mount /Optimize || exit /b 2
+Dism /Mount-Image /ImageFile:"%wimFile%" /Index:%_index% /MountDir:mount || exit /b 2
 
 :: pre-update
 if /i "!edition!"=="WindowsPE" (
@@ -211,7 +211,7 @@ if /i "!edition!"=="WindowsPE" (set "_dTypes=ALL WinPE") else (set "_dTypes=ALL 
 for %%k in (%_dTypes%) do call :tryInstallDrv "drvs\%%k" || goto :Discard
 
 :: optimize hive files
-call :optimizeHive SOFTWARE SYSTEM COMPONENTS DRIVERS mount\Windows\System32\SMI\Store\Machine\SCHEMA.DAT mount\Users\Default\NTUSER.DAT
+call :optimizeHive SOFTWARE SYSTEM COMPONENTS DRIVERS mount\Users\Default\NTUSER.DAT
 pushd mount & del /f /q /a /s *.regtrans-ms *.TM.blf & popd
 
 Dism /Unmount-Image /MountDir:mount /Commit
@@ -294,7 +294,7 @@ exit /b
 set "xBT=%arch:x64=amd64%"
 if exist "mount\Windows\WinSxS\Manifests\%xBT%_microsoft-windows-s*edsecurityupdatesai_*.manifest" exit /b
 
-gsudo -s copy "tmp\%xBT%_microsoft-windows-s*edsecurityupdatesai_*.manifest" mount\Windows\WinSxS\Manifests\
+gsudo --ti copy "tmp\%xBT%_microsoft-windows-s*edsecurityupdatesai_*.manifest" mount\Windows\WinSxS\Manifests\
 
 reg load HKLM\zCOMPONENTS mount\Windows\System32\config\COMPONENTS
 reg load HKLM\zSOFTWARE mount\Windows\System32\config\SOFTWARE
@@ -321,17 +321,17 @@ reg unload HKLM\zSYSTEM
 exit /b
 
 :cleanManual
-if exist mount\Windows\WinSxS\ManifestCache\*.bin gsudo -s del /f /q mount\Windows\WinSxS\ManifestCache\*.bin
-if exist mount\Windows\WinSxS\Temp\PendingDeletes\* gsudo -s del /f /q mount\Windows\WinSxS\Temp\PendingDeletes\*
-if exist mount\Windows\WinSxS\Temp\TransformerRollbackData\* gsudo -s del /f /q /s mount\Windows\WinSxS\Temp\TransformerRollbackData\*
+if exist mount\Windows\WinSxS\ManifestCache\*.bin gsudo --ti del /f /q mount\Windows\WinSxS\ManifestCache\*.bin
+if exist mount\Windows\WinSxS\Temp\PendingDeletes\* gsudo --ti del /f /q mount\Windows\WinSxS\Temp\PendingDeletes\*
+if exist mount\Windows\WinSxS\Temp\TransformerRollbackData\* gsudo --ti del /f /q /s mount\Windows\WinSxS\Temp\TransformerRollbackData\*
 
 if exist mount\Windows\INF\*.log del /f /q mount\Windows\INF\*.log
 del /f /q mount\Windows\CbsTemp\* mount\Windows\Temp\* 2>nul
 call :removeSubdirs mount\Windows\CbsTemp & call :removeSubdirs mount\Windows\Temp
 
 if exist mount\Windows\WinSxS\pending.xml exit /b
-call :removeSubdirs mount\Windows\WinSxS\Temp\InFlight "gsudo -s"
-if exist mount\Windows\WinSxS\Temp\PendingRenames\* gsudo -s del /f /q mount\Windows\WinSxS\Temp\PendingRenames\*
+call :removeSubdirs mount\Windows\WinSxS\Temp\InFlight "gsudo --ti"
+if exist mount\Windows\WinSxS\Temp\PendingRenames\* gsudo --ti del /f /q mount\Windows\WinSxS\Temp\PendingRenames\*
 
 exit /b
 
@@ -376,12 +376,12 @@ if "%~nx1"=="%_a%" set "_a=mount\Windows\System32\config\%_a%"
 set "_b=%~n1" & dir /a /q "%_a%*"
 reg load "HKLM\z%_b%" "%_a%" && (
   :: apply tweaks
-  if exist "tmp\tweaks-%_b%.reg" gsudo -s reg import "tmp\tweaks-%_b%.reg"
-  if exist "tmp\tweaks-%_b%-%arch%.reg" reg import "tmp\tweaks-%_b%-%arch%.reg"
+  for %%a in ("%_b%~" "%_b%~%arch%") do if exist "tmp\tweaks-%%~a.reg" gsudo --ti reg import "tmp\tweaks-%%~a.reg"
+  for %%a in ("%_b%" "%_b%-%arch%") do if exist "tmp\tweaks-%%~a.reg" reg import "tmp\tweaks-%%~a.reg"
 
   :: export to hive file
   reg save "HKLM\z%_b%" "%_a%2" /c /f & reg unload "HKLM\z%_b%"
-  move /y "%_a%2" "%_a%" && for %%a in ("%_a%.LOG1" "%_a%.LOG2") do if "%%~za" gtr "0" del /f /a "%%~a"
+  move /y "%_a%2" "%_a%" && for %%a in ("%_a%.LOG1" "%_a%.LOG2") do if "%%~za" gtr "0" powershell -nop -c "clc '%%~a'"
 )
 
 shift & goto :optimizeHive

@@ -1,0 +1,31 @@
+REGEDIT4
+
+; disable crash dump logging (DumpStack.log.tmp file)
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Control\CrashControl]
+"EnableLogFile"=dword:00000000
+
+; enable long file paths (> 260 characters)
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Control\FileSystem]
+"LongPathsEnabled"=dword:00000001
+
+; stop spammy Windows Hello for Business event log warnings
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Control\WMI\Autologger\EventLog-Application\{23b8d46b-67dd-40a3-b636-d43e50552c6d}]
+"EnableLevel"=dword:00000002
+
+; force Security Center service to start immediately with the system,
+; to fix 10016 DistributedCOM errors where security services (like Defender) fail to start promptly
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Services\wscsvc]
+"DelayedAutoStart"=dword:00000000
+
+;[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Control\BitLocker]
+;"PreventDeviceEncryption"=dword:00000001
+
+; disable hibernation / fast startup
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Control\Power]
+"HibernateEnabled"=dword:00000000
+"HiberbootEnabled"=dword:00000000
+
+; disable Xbox services (XblGameSave, XblAuthManager, xboxgip,...)
+;[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Services\XblGameSave]
+;"Start"=dword:00000004
+
