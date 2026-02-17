@@ -1,0 +1,19 @@
+REGEDIT4
+
+; CCleaner
+[HKEY_LOCAL_MACHINE\zSOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\SharedDLLs]
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.0.3705\\Microsoft.JScript.tlb"=-
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.0.3705\\mscoree.tlb"=-
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.0.3705\\mscorlib.tlb"=-
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.0.3705\\System.Drawing.tlb"=-
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.0.3705\\System.EnterpriseServices.tlb"=-
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.0.3705\\System.tlb"=-
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.0.3705\\System.Windows.Forms.tlb"=-
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.1.4322\\Microsoft.JScript.tlb"=-
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.1.4322\\mscoree.tlb"=-
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.1.4322\\mscorlib.tlb"=-
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.1.4322\\System.Drawing.tlb"=-
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.1.4322\\System.EnterpriseServices.tlb"=-
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.1.4322\\System.tlb"=-
+"X:\\Windows\\Microsoft.NET\\Framework\\v1.1.4322\\System.Windows.Forms.tlb"=-
+

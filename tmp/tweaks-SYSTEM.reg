@@ -29,3 +29,50 @@ REGEDIT4
 ;[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Services\XblGameSave]
 ;"Start"=dword:00000004
 
+; Microsoft Edge services
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Services\edgeupdate]
+"DelayedAutostart"=dword:00000001
+"Start"=dword:00000003
+
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Services\edgeupdatem]
+"DelayedAutostart"=dword:00000001
+
+; disable the "Nearby sharing" function (\System32\p2phost.exe)
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Services\SharedAccess\Parameters\FirewallPolicy\FirewallRules]
+"Collab-P2PHost-In-TCP"=-
+"Collab-P2PHost-Out-TCP"=-
+"Collab-P2PHost-WSD-In-UDP"=-
+"Collab-P2PHost-WSD-Out-UDP"=-
+; Windows Media Center files (%WINNT%\ehome\)
+"MCX-In-TCP"=-
+"MCX-Out-TCP"=-
+"MCX-In-UDP"=-
+"MCX-Out-UDP"=-
+"MCX-McrMgr-Out-TCP"=-
+"MCX-Prov-Out-TCP"=-
+
+;[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Services\SharedAccess\Defaults\FirewallPolicy\FirewallRules]
+
+; disable background app throttling
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Control\Power\PowerThrottling]
+"PowerThrottlingOff"=dword:00000001
+
+; how many ms Windows waits for background services to stop gracefully before forcing them to shutdown (default 5000ms)
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Control]
+"WaitToKillServiceTimeout"="2000"
+
+; fully disable telemetry
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Services\DiagTrack]
+"Start"=dword:00000004
+
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Services\dmwappushservice]
+"Start"=dword:00000004
+
+; disable the Network Diagnostic Usage service to resolve memory leak
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Services\Ndu]
+"Start"=dword:00000004
+
+; force Device Manager to display hidden devices
+[HKEY_LOCAL_MACHINE\zSYSTEM\ControlSet001\Control\Session Manager\Environment]
+"DEVMGR_SHOW_NONPRESENT_DEVICES"="1"
+

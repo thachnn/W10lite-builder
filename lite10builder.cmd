@@ -376,12 +376,14 @@ if "%~nx1"=="%_a%" set "_a=mount\Windows\System32\config\%_a%"
 set "_b=%~n1" & dir /a /q "%_a%*"
 reg load "HKLM\z%_b%" "%_a%" && (
   :: apply tweaks
-  for %%a in ("%_b%~" "%_b%~%arch%") do if exist "tmp\tweaks-%%~a.reg" gsudo --ti reg import "tmp\tweaks-%%~a.reg"
-  for %%a in ("%_b%" "%_b%-%arch%") do if exist "tmp\tweaks-%%~a.reg" reg import "tmp\tweaks-%%~a.reg"
+  if /i not "!edition!"=="WindowsPE" (
+    for %%a in ("%_b%~" "%_b%~%arch%") do if exist "tmp\tweaks-%%~a.reg" gsudo --ti reg import "tmp\tweaks-%%~a.reg"
+    for %%a in ("%_b%" "%_b%-%arch%") do if exist "tmp\tweaks-%%~a.reg" reg import "tmp\tweaks-%%~a.reg"
+  )
 
   :: export to hive file
   reg save "HKLM\z%_b%" "%_a%2" /c /f & reg unload "HKLM\z%_b%"
-  move /y "%_a%2" "%_a%" && for %%a in ("%_a%.LOG1" "%_a%.LOG2") do if "%%~za" gtr "0" powershell -nop -c "clc '%%~a'"
+  move /y "%_a%2" "%_a%" && for %%a in ("%_a%.LOG1" "%_a%.LOG2") do if "%%~za" gtr "0" fsutil file seteof %%a 0
 )
 
 shift & goto :optimizeHive

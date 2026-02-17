@@ -8,6 +8,11 @@ REGEDIT4
 [HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU]
 "NoAutoUpdate"=dword:00000001
 "AUOptions"=dword:00000002
+"AllowMUUpdateService"=dword:00000001
+
+; enable mapped network drives for elevated command prompt
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System]
+"EnableLinkedConnections"=dword:00000001
 
 ; grant the SYSTEM user write access to Microsoft-Windows-LiveId Event Log channels
 [HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\WINEVT\Channels\Microsoft-Windows-LiveId/Analytic]
@@ -46,4 +51,85 @@ REGEDIT4
 [HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\EdgeUpdate]
 "CreateDesktopShortcutDefault"=dword:00000000
 "UpdateDefault"=dword:00000002
+
+; prevent auto-upgrades to newer Windows versions
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\Windows\WindowsUpdate]
+"TargetReleaseVersion"=dword:00000001
+"ProductVersion"="Windows 10"
+"TargetReleaseVersionInfo"="21H2"
+
+; visual effects
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\AnimateMinMax]
+"DefaultValue"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\TaskbarAnimations]
+"DefaultValue"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\SelectionFade]
+"DefaultValue"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\ThumbnailsOrIcon]
+"DefaultValue"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\ListviewAlphaSelect]
+"DefaultValue"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\DragFullWindows]
+"DefaultValue"=dword:00000000
+
+; prevent Windows from searching for missing shortcut targets
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer]
+"NoResolveSearch"=dword:00000001
+"NoResolveTrack"=dword:00000001
+"LinkResolveIgnoreLinkInfo"=dword:00000001
+; disable the tracking and display of recently opened documents, pinning in File Explorer and Start menu
+"NoRecentDocsHistory"=dword:00000001
+"NoLowDiskSpaceChecks"=dword:00000001
+
+; force startup apps to load immediately after login (default ~10s delay)
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Serialize]
+"StartupDelayInMSec"=dword:00000000
+
+; control how much CPU (default 20%) is reserved for background tasks
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile]
+"SystemResponsiveness"=dword:00000001
+; remove network bandwidth restrictions for multimedia (default: 10)
+"NetworkThrottlingIndex"=dword:ffffffff
+
+; block scheduled maintenance tasks - such as updates, disk optimization, and security scans
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance]
+"MaintenanceDisabled"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\ScheduledDiagnostics]
+"EnabledExecution"=dword:00000000
+
+; disable Bing search in Start
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\Windows\Explorer]
+"DisableSearchBoxSuggestions"=dword:00000001
+
+; disable the search box from showing web results
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\Windows\Windows Search]
+"AllowCortana"=dword:00000000
+"DisableWebSearch"=dword:00000001
+"ConnectedSearchUseWeb"=dword:00000000
+"ConnectedSearchUseWebOverMeteredConnections"=dword:00000000
+
+; stop cloud/activity synchronization
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\Windows\System]
+"PublishUserActivities"=dword:00000000
+
+; disable diagnostic data (telemetry)
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\Windows\DataCollection]
+"AllowTelemetry"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\Windows Error Reporting]
+"Disabled"=dword:00000001
+
+; disable consumer experiences (pre-installed apps, ads, suggested apps)
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\Windows\CloudContent]
+"DisableWindowsConsumerFeatures"=dword:00000001
+
+; turn off News and Interests (the taskbar weather and news widget)
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Policies\Microsoft\Windows\Windows Feeds]
+"EnableFeeds"=dword:00000000
 

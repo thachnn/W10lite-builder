@@ -1,0 +1,65 @@
+REGEDIT4
+
+; control File Explorer behavior
+[HKEY_LOCAL_MACHINE\zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
+; show hidden files
+"Hidden"=dword:00000001
+"HideFileExt"=dword:00000000
+"HideDrivesWithNoMedia"=dword:00000000
+; no thumbnails
+"IconsOnly"=dword:00000001
+; disable Recent File Tracking
+"Start_TrackDocs"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\CabinetState]
+"FullPath"=dword:00000001
+
+; visual effects
+[HKEY_LOCAL_MACHINE\zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects]
+"VisualFXSetting"=dword:00000003
+
+; disable Web search results in the Start menu
+[HKEY_LOCAL_MACHINE\zNTUSER\Software\Microsoft\Windows\CurrentVersion\Search]
+"BingSearchEnabled"=dword:00000000
+"CortanaConsent"=dword:00000000
+; prevent Cortana from using your device history
+"DeviceHistoryEnabled"=dword:00000000
+"HistoryViewEnabled"=dword:00000000
+
+; speed up shutdown further
+[HKEY_LOCAL_MACHINE\zNTUSER\Control Panel\Desktop]
+"AutoEndTasks"="1"
+; how long the system waits (default 5000ms) before marking an application as "not responding" during shutdown
+"HungAppTimeout"="2000"
+; how long Windows waits for a hung app to close after the timeout expires before force-closing it (default 20000ms)
+"WaitToKillAppTimeout"="5000"
+; the maximum time (default 5000ms) a system hook (keyboard/mouse) can process an event before Windows considers it hung and potentially unhooks it
+"LowLevelHooksTimeout"="1000"
+
+; disable tablet mode
+[HKEY_LOCAL_MACHINE\zNTUSER\Software\Microsoft\Windows\CurrentVersion\ImmersiveShell]
+"TabletMode"=dword:00000000
+"SignInMode"=dword:00000002
+
+; disable local search history
+[HKEY_LOCAL_MACHINE\zNTUSER\Software\Microsoft\Windows\CurrentVersion\SearchSettings]
+"IsDeviceSearchHistoryEnabled"=dword:00000000
+
+; turn off tracking of app usage
+[HKEY_LOCAL_MACHINE\zNTUSER\Software\Policies\Microsoft\Windows\EdgeUI]
+"DisableMFUTracking"=dword:00000001
+
+; prevent the silent installation of suggested apps (bloatware)
+[HKEY_LOCAL_MACHINE\zNTUSER\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager]
+"SilentInstalledAppsEnabled"=dword:00000000
+"SystemPaneSuggestionsEnabled"=dword:00000000
+"SoftLandingEnabled"=dword:00000000
+; promotional apps
+"ContentDeliveryAllowed"=dword:00000000
+"SubscribedContentEnabled"=dword:00000000
+"SubscribedContent-310093Enabled"=dword:00000000
+"SubscribedContent-338387Enabled"=dword:00000000
+"SubscribedContent-353694Enabled"=dword:00000000
+"SubscribedContent-353696Enabled"=dword:00000000
+"SubscribedContent-353698Enabled"=dword:00000000
+
