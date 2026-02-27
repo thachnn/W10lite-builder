@@ -1,10 +1,7 @@
 REGEDIT4
 
-; \SysWOW64\EsclWiaDriver.dll
-[-HKEY_LOCAL_MACHINE\zSOFTWARE\Classes\WOW6432Node\CLSID\{663e1a94-a37e-4e8a-9e55-5354b2139790}]
-
 ; CCleaner
-[HKEY_LOCAL_MACHINE\zSOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\SharedDLLs]
+[HKEY_LOCAL_MACHINE\zSOFTWARE\Microsoft\Windows\CurrentVersion\SharedDLLs]
 "X:\\Windows\\Microsoft.NET\\Framework\\v1.0.3705\\Microsoft.JScript.tlb"=-
 "X:\\Windows\\Microsoft.NET\\Framework\\v1.0.3705\\mscoree.tlb"=-
 "X:\\Windows\\Microsoft.NET\\Framework\\v1.0.3705\\mscorlib.tlb"=-

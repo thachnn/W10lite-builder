@@ -194,13 +194,12 @@ if /i "!edition!"=="WindowsPE" (
 Dism /ScratchDir:tmp /Image:mount /Cleanup-Image /StartComponentCleanup /ResetBase || goto :Discard
 call :cleanManual
 
-:: update Defender & MRT
-if /i not "!edition!"=="WindowsPE" call :updateDefender
+:: update Defender, MRT, Edge,...
+if /i not "!edition!"=="WindowsPE" (call :updateDefender & call :tryUpdateEdge)
 
 :: update ISO files
 for %%k in (UpdateAgent.dll Facilitator.dll ServicingCommon.dll) do call :updateDVD "%%k" mount\Windows\System32
-:: if exist mount\Windows\servicing\Packages\WinPE-Setup-Package~*.mum
-if exist mount\sources\setup.exe call :updateDVDboot
+if exist mount\sources\setup.exe if exist mount\Windows\servicing\Packages\WinPE-Setup-Package~*.mum call :updateDVDboot
 
 if /i not "%wimFile%"=="Winre.wim" if exist mount\Windows\System32\Recovery\Winre.wim if exist Winre.wim (
   xcopy /kdry Winre.wim mount\Windows\System32\Recovery\
@@ -333,6 +332,7 @@ if exist mount\Windows\WinSxS\pending.xml exit /b
 call :removeSubdirs mount\Windows\WinSxS\Temp\InFlight "gsudo --ti"
 if exist mount\Windows\WinSxS\Temp\PendingRenames\* gsudo --ti del /f /q mount\Windows\WinSxS\Temp\PendingRenames\*
 
+if exist mount\inetpub\ if not exist mount\inetpub\* rmdir mount\inetpub
 exit /b
 
 :removeSubdirs
@@ -366,6 +366,24 @@ if /i not "%arch%"=="x86" (
   for /d %%a in ("mount\Program Files (x86)\Windows Defender\*-*.") do (
     if not exist "%_mpam%\x86\%%~na\MpAsDesc.dll.mui" xcopy /ki "%%a\MpAsDesc.dll.mui" "%_mpam%\x86\%%~na\"
   )
+)
+exit /b
+
+:tryUpdateEdge
+:: apply custom patches
+if exist "uup\CustomPatches.!_build!-%arch%.zip" 7z x -ba -aoa "uup\CustomPatches.!_build!-%arch%.zip" -omount\
+
+:: MicrosoftEdgeInstaller.exe /installsource windows /silent /install "appguid={56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}&appname=Microsoft Edge&needsAdmin=True&usagestats=0&brand=INBX" /installelevated /appargs "appguid={56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}&installerdata=%7B%22distribution%22%3A%7B%22msi%22%3Afalse%2C%22system_level%22%3Atrue%2C%22verbose_logging%22%3Atrue%2C%22allow_downgrade%22%3Afalse%2C%22do_not_create_desktop_shortcut%22%3Atrue%2C%22do_not_create_taskbar_shortcut%22%3Atrue%7D%7D"
+for %%a in ("uup\MicrosoftEdge-*-%arch%.7z") do if exist "tmp\%%~na.reg" (
+  for /d %%x in ("mount\Program Files (x86)\Microsoft\Edge*") do rmdir /s /q "%%x"
+  7z x -ba -aoa "%%a" -o"mount\Program Files (x86)\Microsoft\"
+
+  reg load HKLM\zSOFTWARE mount\Windows\System32\config\SOFTWARE
+  reg load HKLM\zSYSTEM mount\Windows\System32\config\SYSTEM
+  reg import "tmp\%%~na.reg"
+  reg unload HKLM\zSOFTWARE & reg unload HKLM\zSYSTEM
+
+  exit /b
 )
 exit /b
 
