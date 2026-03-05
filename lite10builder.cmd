@@ -135,7 +135,7 @@ exit /b
 set "_index=%~1"
 echo Update "!edition!.!_build!" image "%wimFile%:%_index%"
 
-if exist mount\* rmdir /s /q mount
+if exist mount\ dir /b /a mount\ | findstr . && rmdir /s /q mount
 if not exist mount\ mkdir mount
 
 ::wimlib-imagex extract "%wimFile%" %_index% Windows/servicing/Packages/Package_for_*.mum Windows/WinSxS/Manifests/*_microsoft-windows-foundation_* Windows/System32/config Windows/System32/Recovery Windows/System32/SMI/Store/Machine Windows/System32/UpdateAgent.* Windows/System32/Facilitator.* sources setup.exe Windows/Boot --dest-dir=mount --preserve-dir-structure --nullglob --no-acls
@@ -321,8 +321,8 @@ exit /b
 
 :cleanManual
 if exist mount\Windows\WinSxS\ManifestCache\*.bin gsudo --ti del /f /q mount\Windows\WinSxS\ManifestCache\*.bin
-if exist mount\Windows\WinSxS\Temp\PendingDeletes\* gsudo --ti del /f /q mount\Windows\WinSxS\Temp\PendingDeletes\*
-if exist mount\Windows\WinSxS\Temp\TransformerRollbackData\* gsudo --ti del /f /q /s mount\Windows\WinSxS\Temp\TransformerRollbackData\*
+if exist mount\Windows\WinSxS\Temp\PendingDeletes\ gsudo --ti del /f /q mount\Windows\WinSxS\Temp\PendingDeletes\*
+if exist mount\Windows\WinSxS\Temp\TransformerRollbackData\ gsudo --ti del /f /q /s mount\Windows\WinSxS\Temp\TransformerRollbackData\*
 
 if exist mount\Windows\INF\*.log del /f /q mount\Windows\INF\*.log
 del /f /q mount\Windows\CbsTemp\* mount\Windows\Temp\* 2>nul
@@ -330,9 +330,9 @@ call :removeSubdirs mount\Windows\CbsTemp & call :removeSubdirs mount\Windows\Te
 
 if exist mount\Windows\WinSxS\pending.xml exit /b
 call :removeSubdirs mount\Windows\WinSxS\Temp\InFlight "gsudo --ti"
-if exist mount\Windows\WinSxS\Temp\PendingRenames\* gsudo --ti del /f /q mount\Windows\WinSxS\Temp\PendingRenames\*
+if exist mount\Windows\WinSxS\Temp\PendingRenames\ gsudo --ti del /f /q mount\Windows\WinSxS\Temp\PendingRenames\*
 
-if exist mount\inetpub\ if not exist mount\inetpub\* rmdir mount\inetpub
+if exist mount\inetpub\ rmdir mount\inetpub 2>nul
 exit /b
 
 :removeSubdirs
@@ -376,7 +376,7 @@ if exist "uup\CustomPatches.!_build!-%arch%.zip" 7z x -ba -aoa "uup\CustomPatche
 :: MicrosoftEdgeInstaller.exe /installsource windows /silent /install "appguid={56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}&appname=Microsoft Edge&needsAdmin=True&usagestats=0&brand=INBX" /installelevated /appargs "appguid={56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}&installerdata=%7B%22distribution%22%3A%7B%22msi%22%3Afalse%2C%22system_level%22%3Atrue%2C%22verbose_logging%22%3Atrue%2C%22allow_downgrade%22%3Afalse%2C%22do_not_create_desktop_shortcut%22%3Atrue%2C%22do_not_create_taskbar_shortcut%22%3Atrue%7D%7D"
 for %%a in ("uup\MicrosoftEdge-*-%arch%.7z") do if exist "tmp\%%~na.reg" (
   for /d %%x in ("mount\Program Files (x86)\Microsoft\Edge*") do rmdir /s /q "%%x"
-  7z x -ba -aoa "%%a" -o"mount\Program Files (x86)\Microsoft\"
+  7z x -ba -aoa -snld "%%a" -o"mount\Program Files (x86)\Microsoft\"
 
   reg load HKLM\zSOFTWARE mount\Windows\System32\config\SOFTWARE
   reg load HKLM\zSYSTEM mount\Windows\System32\config\SYSTEM
